@@ -1,0 +1,30 @@
+{
+  "name": "paotang-share",
+  "version": "1.0.0",
+  "description": "เป๋าตังค์ — แอปบันทึกรายรับรายจ่าย + เก็บสลิป (ติดตั้งใช้เองได้ ข้อมูลอยู่ใน Google ของคุณ)",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@expo-google-fonts/mali": "^0.4.1",
+    "@fontsource/ibm-plex-sans-thai-looped": "^5.3.0",
+    "@fontsource/mali": "^5.3.0",
+    "jsqr": "^1.4.0",
+    "lucide-react": "^1.61.0",
+    "next": "^16.4.2",
+    "pdfkit": "^0.20.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@types/pdfkit": "^0.17.7",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^7.0.2"
+  },
+  "private": true,
+  "license": "MIT"
+}
