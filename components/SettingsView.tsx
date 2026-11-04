@@ -3,6 +3,7 @@ import { useState } from "react";
 import { baht, todayISO } from "@/lib/format";
 import { iconFor } from "@/lib/icons";
 import type { Recurring, Settings, TxType } from "@/lib/types";
+import type { Me } from "@/app/page";
 
 function TagEditor({ items, onChange, placeholder }: { items: string[]; onChange: (v: string[]) => void; placeholder: string }) {
   const [v, setV] = useState("");
@@ -50,11 +51,106 @@ const blankRec = (s: Settings): Recurring => ({
 interface Props {
   settings: Settings;
   scanEnabled: boolean;
+  me: Me | null;
+  onMe: (u: Partial<Me> & { hasGeminiKey: boolean }) => void;
   onSaved: (s: Settings) => void;
   onLogout: () => void;
 }
 
-export default function SettingsView({ settings, scanEnabled, onSaved, onLogout }: Props) {
+function AccountCards({ me, scanEnabled, onMe }: { me: Me | null; scanEnabled: boolean; onMe: Props["onMe"] }) {
+  const [name, setName] = useState(me?.name || "");
+  const [cur, setCur] = useState("");
+  const [next, setNext] = useState("");
+  const [key, setKey] = useState("");
+  const [busy, setBusy] = useState("");
+  const [note, setNote] = useState<{ card: string; ok: boolean; text: string } | null>(null);
+  const digits = (v: string) => v.replace(/\D/g, "").slice(0, 8);
+
+  async function patch(card: string, body: Record<string, string>, okText: string) {
+    setBusy(card);
+    setNote(null);
+    try {
+      const res = await fetch("/api/me", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
+      onMe(data.user);
+      setNote({ card, ok: true, text: okText });
+      return true;
+    } catch (e) {
+      setNote({ card, ok: false, text: (e as Error).message });
+      return false;
+    } finally {
+      setBusy("");
+    }
+  }
+  const Note = ({ card }: { card: string }) =>
+    note?.card === card ? <p className={note.ok ? "ok" : "err"} role="status">{note.text}</p> : null;
+
+  return (
+    <>
+      <section className="panel glass">
+        <h3>🙋 บัญชีของฉัน</h3>
+        <p className="hint">{me?.email}</p>
+        <div className="add-row">
+          <input className="in" aria-label="ชื่อที่ใช้แสดง" placeholder="ชื่อที่ใช้แสดง" value={name} maxLength={60} onChange={(e) => setName(e.target.value)} />
+          <button className="chip on" disabled={busy === "name" || !name.trim() || name.trim() === me?.name} onClick={() => patch("name", { name: name.trim() }, "เปลี่ยนชื่อแล้ว")}>บันทึก</button>
+        </div>
+        <Note card="name" />
+        <h4 style={{ margin: "14px 0 6px" }}>🔑 เปลี่ยน PIN</h4>
+        <div className="date-row">
+          <input className="in num" type="password" inputMode="numeric" autoComplete="current-password" placeholder="PIN ปัจจุบัน" aria-label="PIN ปัจจุบัน" value={cur} onChange={(e) => setCur(digits(e.target.value))} />
+          <input className="in num" type="password" inputMode="numeric" autoComplete="new-password" placeholder="PIN ใหม่ 6–8 หลัก" aria-label="PIN ใหม่" value={next} onChange={(e) => setNext(digits(e.target.value))} />
+        </div>
+        <button
+          className="btn ghost"
+          style={{ marginTop: 10 }}
+          disabled={busy === "pin" || cur.length < 4 || next.length < 6}
+          onClick={async () => {
+            if (await patch("pin", { currentPin: cur, newPin: next }, "เปลี่ยน PIN แล้ว — ครั้งหน้าใช้ PIN ใหม่ และไฟล์ PDF ใหม่จะใช้ PIN ใหม่เป็นรหัส")) {
+              setCur("");
+              setNext("");
+            }
+          }}
+        >
+          เปลี่ยน PIN
+        </button>
+        <Note card="pin" />
+        {me?.isAdmin && (
+          <a className="btn" style={{ marginTop: 12, textAlign: "center" }} href="/admin">👑 จัดการผู้ใช้</a>
+        )}
+      </section>
+
+      <section className="panel glass">
+        <h3>✨ AI อ่านสลิป</h3>
+        {me?.hasGeminiKey ? (
+          <>
+            <p className="ok">✓ ใช้คีย์ของคุณอยู่ — แอปจะอ่านยอด วันที่ และชื่อผู้รับจากสลิปให้อัตโนมัติ</p>
+            <button className="btn ghost" disabled={busy === "key"} onClick={() => patch("key", { geminiKey: "" }, "ลบคีย์แล้ว")}>ลบคีย์ของฉัน</button>
+          </>
+        ) : (
+          <>
+            {scanEnabled && me?.sharedAiKey ? (
+              <p className="ok">✓ ใช้คีย์กลางของผู้ดูแลอยู่ — ใส่คีย์ของตัวเองได้ถ้าต้องการ</p>
+            ) : (
+              <p className="hint">
+                ใส่คีย์ Gemini ของคุณเอง (ฟรี) — ขอได้ที่ <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>{" "}
+                ไม่ใส่ก็ใช้แอปได้ แค่ต้องกรอกยอดเอง (QR ยังอ่านได้ปกติ)
+              </p>
+            )}
+            <div className="add-row">
+              <input className="in" aria-label="คีย์ Gemini" placeholder="AIza…" value={key} autoComplete="off" onChange={(e) => setKey(e.target.value.trim())} />
+              <button className="chip on" disabled={busy === "key" || key.length < 20} onClick={async () => { if (await patch("key", { geminiKey: key }, "บันทึกคีย์แล้ว ✨")) setKey(""); }}>บันทึก</button>
+            </div>
+            <p className="hint">รูปสลิปจะถูกส่งไปที่ Google เพื่ออ่าน และคีย์จะเก็บไว้ในระบบของผู้ดูแลแอป</p>
+          </>
+        )}
+        <Note card="key" />
+      </section>
+    </>
+  );
+}
+
+export default function SettingsView({ settings, scanEnabled, me, onMe, onSaved, onLogout }: Props) {
   const [s, setS] = useState<Settings>(settings);
   const [rec, setRec] = useState<Recurring>(blankRec(settings));
   const [busy, setBusy] = useState(false);
@@ -121,7 +217,7 @@ export default function SettingsView({ settings, scanEnabled, onSaved, onLogout 
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      setMsg("สร้าง PDF แล้ว — รหัสผ่านเปิดไฟล์คือ PIN ของแอป");
+      setMsg("สร้าง PDF แล้ว — รหัสผ่านเปิดไฟล์คือ PIN ของคุณ");
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -261,7 +357,7 @@ export default function SettingsView({ settings, scanEnabled, onSaved, onLogout 
 
       <section className="panel glass">
         <h3>📄 สรุป PDF</h3>
-        <p className="hint">ไฟล์ PDF สีหวาน ๆ รวมรายการทั้งหมดในช่วงที่เลือก — เปิดไฟล์ด้วย PIN เดียวกับที่ใช้เข้าแอป</p>
+        <p className="hint">ไฟล์ PDF สีหวาน ๆ รวมรายการทั้งหมดในช่วงที่เลือก — เปิดไฟล์ด้วย PIN ที่คุณใช้เข้าแอป</p>
         <div className="chips">
           <button className="chip" onClick={() => preset("7d")}>7 วันล่าสุด</button>
           <button className="chip" onClick={() => preset("month")}>เดือนนี้</button>
@@ -278,25 +374,15 @@ export default function SettingsView({ settings, scanEnabled, onSaved, onLogout 
         <h3>💌 สรุปทางอีเมล</h3>
         <label className="switch">
           <input type="checkbox" checked={s.weeklyEmail} onChange={(e) => set("weeklyEmail", e.target.checked)} />
-          <span>ส่งสรุปรายสัปดาห์ทุกวันอาทิตย์ 19:00 ไปที่อีเมลเจ้าของชีต พร้อมแนบ PDF</span>
+          <span>ส่งสรุปรายสัปดาห์ทุกวันอาทิตย์ 19:00 ไปที่อีเมลของคุณ พร้อมแนบ PDF (รหัสผ่าน = PIN ของคุณ)</span>
         </label>
         <button className="btn ghost" disabled={busy} onClick={testEmail}>ส่งสรุปให้ดูตอนนี้</button>
       </section>
 
-      <section className="panel glass">
-        <h3>✨ AI อ่านสลิป</h3>
-        {scanEnabled ? (
-          <p className="ok">✓ เปิดใช้งานแล้ว — แอปจะอ่านยอด วันที่ และชื่อผู้รับจากสลิปให้อัตโนมัติ</p>
-        ) : (
-          <p className="hint">
-            ยังไม่เปิด — ขอ API key ฟรีที่ <a href="https://aistudio.google.com/apikey" target="_blank" rel="noreferrer">aistudio.google.com/apikey</a>{" "}
-            แล้วใส่เป็น <code>GEMINI_API_KEY</code> ใน Vercel → Redeploy
-          </p>
-        )}
-      </section>
+      <AccountCards key={me?.id || "-"} me={me} scanEnabled={scanEnabled} onMe={onMe} />
 
       <section className="panel glass links">
-        <a href="/setup">🔌 ตรวจสถานะการเชื่อมต่อ</a>
+        {me?.isAdmin ? <a href="/setup">🔌 ตรวจสถานะการเชื่อมต่อ</a> : <span />}
         <button className="link-btn danger-text" onClick={onLogout}>🚪 ออกจากระบบ</button>
       </section>
 

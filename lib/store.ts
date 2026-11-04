@@ -33,6 +33,7 @@ async function call<T>(action: string, payload: Record<string, unknown> = {}): P
         : `Apps Script error ${res.status}`,
     );
   }
+  if (data.error === "user_inactive") throw new StoreError("บัญชีนี้ยังไม่ได้รับอนุมัติ หรือถูกระงับ — ติดต่อผู้ดูแล", 401);
   if (data.error === "unauthorized") throw new StoreError("APPS_SCRIPT_SECRET ไม่ตรงกับรหัสลับในสคริปต์ — ใน Apps Script เลือกฟังก์ชัน showSecret แล้วกด Run เพื่อดูรหัสที่ถูกต้อง (ถ้ายังไม่เคย Run setup ให้ Run setup ก่อน)", 500);
   if (data.error === "unknown action")
     throw new StoreError("Apps Script ยังเป็นเวอร์ชันเก่า — วางโค้ด apps-script/Code.gs ใหม่แล้ว Deploy เป็น New version");
@@ -46,36 +47,64 @@ const encSlip = (slip: Slip) =>
 const normTx = (t: Tx): Tx => ({ ...t, account: t.account || "" });
 const normSettings = (s: Partial<Settings> | undefined): Settings => ({ ...DEFAULT_SETTINGS, ...(s || {}) });
 
-export const ping = () => call<{ ok: boolean; version?: number; sheet: string; folder: string }>("ping");
-
-export async function bootstrap(): Promise<{ items: Tx[]; settings: Settings }> {
-  const r = await call<{ items: Tx[]; settings: Settings }>("bootstrap");
-  return { items: r.items.map(normTx), settings: normSettings(r.settings) };
+export interface UserPublic {
+  id: string;
+  email: string;
+  name: string;
+  status: "pending" | "active" | "suspended";
+  role: "admin" | "user";
+  createdAt: string;
+  lastLogin: string;
+  hasGeminiKey: boolean;
+  txCount?: number;
+}
+export interface UserPrivate extends UserPublic {
+  pinEnc: string;
+  geminiKey: string;
 }
 
-export async function addTx(tx: Tx, slip?: Slip): Promise<Tx> {
-  return (await call<{ item: Tx }>("add", { tx, slip: encSlip(slip) })).item;
+export const ping = () =>
+  call<{ ok: boolean; version?: number; multiUser?: boolean; sheet: string; folder: string; users?: number; mailQuota?: number }>("ping");
+
+// ----- accounts -----
+export const findUser = async (email: string) => (await call<{ user: UserPrivate | null }>("userFind", { email })).user;
+export const getUser = async (id: string) => (await call<{ user: UserPrivate | null }>("userGet", { id })).user;
+export const createUser = async (user: { email: string; name: string; pinEnc: string; status: "pending" | "active"; role: "admin" | "user" }) =>
+  (await call<{ user: UserPublic }>("userCreate", { user })).user;
+export const updateUser = async (id: string, patch: Partial<Pick<UserPrivate, "name" | "status" | "role" | "pinEnc" | "geminiKey" | "lastLogin">>) =>
+  (await call<{ user: UserPublic }>("userUpdate", { id, patch })).user;
+export const listUsers = async () => (await call<{ users: UserPublic[] }>("userList")).users;
+export const deleteUser = (id: string) => call<{ ok: boolean; removed: number }>("userDelete", { id });
+
+// ----- one user's data -----
+export async function bootstrap(uid: string): Promise<{ items: Tx[]; settings: Settings; user: UserPublic }> {
+  const r = await call<{ items: Tx[]; settings: Settings; user: UserPublic }>("bootstrap", { uid });
+  return { items: r.items.map(normTx), settings: normSettings(r.settings), user: r.user };
 }
 
-export async function updateTx(id: string, patch: Partial<Tx>, slip?: Slip): Promise<Tx> {
-  return (await call<{ item: Tx }>("update", { id, patch, slip: encSlip(slip) })).item;
+export async function addTx(uid: string, tx: Tx, slip?: Slip): Promise<Tx> {
+  return (await call<{ item: Tx }>("add", { uid, tx, slip: encSlip(slip) })).item;
 }
 
-export async function deleteTx(id: string) {
-  await call("delete", { id });
+export async function updateTx(uid: string, id: string, patch: Partial<Tx>, slip?: Slip): Promise<Tx> {
+  return (await call<{ item: Tx }>("update", { uid, id, patch, slip: encSlip(slip) })).item;
 }
 
-export async function getSlip(id: string): Promise<{ mime: string; bytes: Buffer }> {
-  const res = await call<{ mime: string; data: string }>("slip", { id });
+export async function deleteTx(uid: string, id: string) {
+  await call("delete", { uid, id });
+}
+
+export async function getSlip(uid: string, id: string): Promise<{ mime: string; bytes: Buffer }> {
+  const res = await call<{ mime: string; data: string }>("slip", { uid, id });
   return { mime: res.mime, bytes: Buffer.from(res.data, "base64") };
 }
 
-export async function saveSettings(settings: Settings, appUrl?: string): Promise<Settings> {
-  return normSettings((await call<{ settings: Settings }>("saveSettings", { settings, appUrl })).settings);
+export async function saveSettings(uid: string, settings: Settings, appUrl?: string): Promise<Settings> {
+  return normSettings((await call<{ settings: Settings }>("saveSettings", { uid, settings, appUrl })).settings);
 }
 
-export const testEmail = (appUrl?: string) =>
-  call<{ ok: boolean; to: string; pdf?: boolean }>("testEmail", { appUrl });
+export const testEmail = (uid: string, appUrl?: string) =>
+  call<{ ok: boolean; to: string; pdf?: boolean }>("testEmail", { uid, appUrl });
 
-export const authOp = (op: "status" | "fail" | "ok") =>
-  call<{ locked: boolean; lockUntil: number; remaining: number }>("auth", { op });
+export const authOp = (key: string, op: "status" | "fail" | "ok") =>
+  call<{ locked: boolean; lockUntil: number; remaining: number }>("auth", { key, op });

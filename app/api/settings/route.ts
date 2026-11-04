@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireUid } from "@/lib/session";
 import { saveSettings, testEmail } from "@/lib/store";
 import { fail } from "@/lib/txform";
 import type { Recurring, Settings } from "@/lib/types";
@@ -47,7 +48,7 @@ function appUrl(req: Request) {
 
 export async function PUT(req: Request) {
   try {
-    return NextResponse.json({ settings: await saveSettings(sanitize(await req.json()), appUrl(req)) });
+    return NextResponse.json({ settings: await saveSettings(await requireUid(req), sanitize(await req.json()), appUrl(req)) });
   } catch (e) {
     return fail(e);
   }
@@ -56,7 +57,7 @@ export async function PUT(req: Request) {
 // send a test weekly summary now
 export async function POST(req: Request) {
   try {
-    return NextResponse.json(await testEmail(appUrl(req)));
+    return NextResponse.json(await testEmail(await requireUid(req), appUrl(req)));
   } catch (e) {
     return fail(e);
   }

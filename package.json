@@ -1,7 +1,7 @@
 {
   "name": "paotang-share",
   "version": "1.0.0",
-  "description": "เป๋าตังค์ — แอปบันทึกรายรับรายจ่าย + เก็บสลิป (ติดตั้งใช้เองได้ ข้อมูลอยู่ใน Google ของคุณ)",
+  "description": "เป๋าตังค์ หลายผู้ใช้ — บันทึกรายรับรายจ่าย + เก็บสลิป (ข้อมูลอยู่ใน Google Sheet/Drive ของผู้ดูแล)",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

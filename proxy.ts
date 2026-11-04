@@ -25,6 +25,6 @@ export async function proxy(req: NextRequest) {
 export const config = {
   matcher: [
     // everything except login, PWA assets and Next internals
-    "/((?!login|api/login|manifest.webmanifest|sw.js|icons/|icon.png|favicon.ico|_next/).*)",
+    "/((?!login|signup|setup|api/login|api/signup|manifest.webmanifest|sw.js|icons/|icon.png|favicon.ico|_next/).*)",
   ],
 };

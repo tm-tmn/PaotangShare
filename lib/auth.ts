@@ -22,30 +22,30 @@ async function hmac(data: string): Promise<string> {
   return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-// token = v2.<issuedAt>.<lastActive>.<hmac>. The session dies after SESSION_DAYS, or IDLE_MS without a request.
+// token = v3.<userId>.<issuedAt>.<lastActive>.<hmac>. The session dies after SESSION_DAYS, or IDLE_MS without a request.
 // Every request through the proxy slides lastActive forward (touchSession).
-export async function createSession(now = Date.now()): Promise<string> {
-  const payload = `v2.${now}.${now}`;
+export async function createSession(uid: string, now = Date.now()): Promise<string> {
+  const payload = `v3.${uid}.${now}.${now}`;
   return `${payload}.${await hmac(payload)}`;
 }
 
-async function parseSession(token: string | undefined): Promise<{ issued: number; last: number } | null> {
+export async function parseSession(token: string | undefined): Promise<{ uid: string; issued: number; last: number } | null> {
   if (!token) return null;
   const i = token.lastIndexOf(".");
   if (i < 0) return null;
   const payload = token.slice(0, i);
   const sig = token.slice(i + 1);
-  const [v, a, b] = payload.split(".");
+  const [v, uid, a, b, extra] = payload.split(".");
   const issued = Number(a);
   const last = Number(b);
-  if (v !== "v2" || !issued || !last) return null;
+  if (v !== "v3" || extra !== undefined || !/^[\w-]{8,64}$/.test(uid || "") || !issued || !last) return null;
   const now = Date.now();
   if (issued + SESSION_DAYS * 86400_000 < now || last + IDLE_MS < now || last > now + 60_000) return null;
   const expected = await hmac(payload);
   if (expected.length !== sig.length) return null;
   let diff = 0;
   for (let k = 0; k < sig.length; k++) diff |= sig.charCodeAt(k) ^ expected.charCodeAt(k);
-  return diff === 0 ? { issued, last } : null;
+  return diff === 0 ? { uid, issued, last } : null;
 }
 
 export async function verifySession(token: string | undefined): Promise<boolean> {
@@ -57,8 +57,14 @@ export async function touchSession(token: string | undefined): Promise<string | 
   const s = await parseSession(token);
   const now = Date.now();
   if (!s || now - s.last < 20_000) return null;
-  const payload = `v2.${s.issued}.${now}`;
+  const payload = `v3.${s.uid}.${s.issued}.${now}`;
   return `${payload}.${await hmac(payload)}`;
+}
+
+/** user id from the request's session cookie (works in route handlers) */
+export async function sessionUid(req: Request): Promise<string | null> {
+  const m = (req.headers.get("cookie") || "").match(new RegExp(`(?:^|;\\s*)${SESSION_COOKIE}=([^;]+)`));
+  return (await parseSession(m?.[1]))?.uid || null;
 }
 
 export const sessionCookieOptions = () => ({

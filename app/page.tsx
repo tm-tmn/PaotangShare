@@ -13,6 +13,15 @@ import { baht, daysLeft, fullDate, greeting, monthLabel, shiftMonth, todayISO } 
 import { DEFAULT_SETTINGS, type Settings, type Tx } from "@/lib/types";
 
 type Tab = "list" | "stats" | "settings";
+export interface Me {
+  id: string;
+  email: string;
+  name: string;
+  role: "admin" | "user";
+  hasGeminiKey: boolean;
+  isAdmin: boolean;
+  sharedAiKey: boolean;
+}
 type Sheet =
   | { kind: "add"; queue: Blob[]; index: number }
   | { kind: "edit"; tx: Tx }
@@ -43,6 +52,7 @@ export default function Home() {
   const [items, setItems] = useState<Tx[] | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
   const [scanEnabled, setScanEnabled] = useState(false);
+  const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState("");
   const [syncing, setSyncing] = useState(false);
   const [tab, setTab] = useState<Tab>("list");
@@ -73,6 +83,7 @@ export default function Home() {
       setItems(data.items);
       setSettings(data.settings);
       setScanEnabled(!!data.scanEnabled);
+      setMe({ ...data.user, isAdmin: !!data.isAdmin, sharedAiKey: !!data.sharedAiKey });
       writeCache(data.items, data.settings);
       setError("");
     } catch (e) {
@@ -226,7 +237,7 @@ export default function Home() {
           <div className="hello">
             <Piggy size={46} mood={limit?.level === "over" ? "wow" : "happy"} className="bob" />
             <div>
-              <small>{hello || "สวัสดีค่ะ"}</small>
+              <small>{hello || "สวัสดีค่ะ"}{me?.name ? ` คุณ${me.name}` : ""}</small>
               <b>เป๋าตังค์</b>
             </div>
           </div>
@@ -334,6 +345,8 @@ export default function Home() {
           <SettingsView
             settings={settings}
             scanEnabled={scanEnabled}
+            me={me}
+            onMe={(u) => { setMe((cur) => (cur ? { ...cur, ...u } : cur)); setScanEnabled(u.hasGeminiKey || !!me?.sharedAiKey); }}
             onSaved={(s) => { setSettings(s); flash("บันทึกการตั้งค่าแล้ว 💖"); }}
             onLogout={logout}
           />

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireActiveUser } from "@/lib/session";
 import type { ScanResult } from "@/lib/types";
 
 export const maxDuration = 60;
@@ -30,8 +31,15 @@ function fixDate(d?: string) {
 }
 
 export async function POST(req: Request) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) return NextResponse.json({ error: "ยังไม่ได้ตั้งค่า GEMINI_API_KEY" }, { status: 501 });
+  let key = "";
+  try {
+    // each user's own Gemini key; an optional shared key set by the admin is the fallback
+    const user = await requireActiveUser(req);
+    key = user.geminiKey || process.env.GEMINI_API_KEY || "";
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 401 });
+  }
+  if (!key) return NextResponse.json({ error: "ยังไม่ได้ใส่คีย์ AI — ไปที่ ตั้งค่า → AI อ่านสลิป" }, { status: 501 });
   try {
     const form = await req.formData();
     const file = form.get("image");

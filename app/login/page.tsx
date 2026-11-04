@@ -11,10 +11,19 @@ function fmtLeft(ms: number) {
   return h ? `${h}:${p(m)}:${p(sec)}` : `${m}:${p(sec)}`;
 }
 
+const EMAIL_KEY = "pt-email";
+const CACHE_KEY = "pt-cache-v1";
+const OWNER_KEY = "pt-cache-owner"; // whose list is in the offline cache
+const validEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
+
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
 
 export default function Login() {
   const [pin, setPin] = useState("");
+  const [email, setEmail] = useState("");
+  useEffect(() => {
+    try { setEmail(localStorage.getItem(EMAIL_KEY) || ""); } catch { /* ignore */ }
+  }, []);
   const [autoLocked, setAutoLocked] = useState(false);
   useEffect(() => setAutoLocked(new URLSearchParams(location.search).has("idle")), []);
   const [err, setErr] = useState("");
@@ -24,13 +33,17 @@ export default function Login() {
   const [now, setNow] = useState(() => Date.now());
   const locked = lockUntil > now;
 
-  // check for an active lock when the page opens
+  // check for an active lock on the typed account
   useEffect(() => {
-    fetch("/api/login", { cache: "no-store" })
-      .then((r) => r.json())
-      .then((d) => d.locked && setLockUntil(d.lockUntil))
-      .catch(() => {});
-  }, []);
+    if (!validEmail(email)) return;
+    const t = setTimeout(() => {
+      fetch(`/api/login?email=${encodeURIComponent(email.trim())}`, { cache: "no-store" })
+        .then((r) => r.json())
+        .then((d) => { setLockUntil(d.locked ? d.lockUntil : 0); setNow(Date.now()); })
+        .catch(() => {});
+    }, 400);
+    return () => clearTimeout(t);
+  }, [email]);
 
   // tick the countdown while locked
   useEffect(() => {
@@ -47,16 +60,28 @@ export default function Login() {
   }, [lockUntil]);
 
   const submit = useCallback(async (value: string) => {
-    if (value.length < 4 || busy || locked) return;
+    if (busy || locked) return;
+    if (!validEmail(email)) {
+      setErr("กรุณาใส่อีเมลให้ถูกต้อง");
+      return;
+    }
+    if (value.length < 6) return;
+    try { localStorage.setItem(EMAIL_KEY, email.trim().toLowerCase()); } catch { /* ignore */ }
     setBusy(true);
     setErr("");
     const res = await fetch("/api/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pin: value }),
+      body: JSON.stringify({ email: email.trim(), pin: value }),
     });
     if (res.ok) {
-      try { localStorage.setItem(ACTIVE_KEY, String(Date.now())); } catch { /* ignore */ }
+      try {
+        const addr = email.trim().toLowerCase();
+        // another person signing in on this device must not see the previous person's cached list
+        if (localStorage.getItem(OWNER_KEY) !== addr) localStorage.removeItem(CACHE_KEY);
+        localStorage.setItem(OWNER_KEY, addr);
+        localStorage.setItem(ACTIVE_KEY, String(Date.now()));
+      } catch { /* ignore */ }
       location.replace("/");
       return;
     }
@@ -72,7 +97,7 @@ export default function Login() {
     setShake(Date.now());
     setPin("");
     setBusy(false);
-  }, [busy, locked]);
+  }, [busy, locked, email]);
 
   const press = useCallback((k: string) => {
     if (busy || locked) return;
@@ -83,6 +108,10 @@ export default function Login() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === "INPUT") {
+        if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+        return;
+      }
       if (/^\d$/.test(e.key)) press(e.key);
       else if (e.key === "Backspace") press("del");
       else if (e.key === "Enter") submit(pin);
@@ -98,9 +127,19 @@ export default function Login() {
         <div className="login-card glass-strong pop-in">
           <Piggy size={104} mood={locked ? "sleepy" : err ? "wow" : pin.length ? "happy" : "wink"} className="bob" />
           <h1>เป๋าตังค์</h1>
-          <p>{autoLocked ? "🔒 ล็อกให้อัตโนมัติ เพราะไม่ได้ใช้งานเกิน 5 นาที — ใส่ PIN อีกครั้งนะคะ" : "ใส่ PIN เพื่อเข้าใช้งานค่ะ"}</p>
+          <p>{autoLocked ? "🔒 ล็อกให้อัตโนมัติ เพราะไม่ได้ใช้งานเกิน 5 นาที — ใส่ PIN อีกครั้งนะคะ" : "ใส่อีเมลและ PIN เพื่อเข้าใช้งานค่ะ"}</p>
+          <input
+            className="in login-email"
+            type="email"
+            inputMode="email"
+            autoComplete="username"
+            placeholder="อีเมลของคุณ"
+            aria-label="อีเมล"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setErr(""); }}
+          />
           <div className={`pin-dots ${shake ? "shake" : ""}`} key={shake} aria-live="polite" aria-label={`ใส่แล้ว ${pin.length} หลัก`}>
-            {Array.from({ length: Math.max(4, pin.length) }, (_, i) => (
+            {Array.from({ length: Math.max(6, pin.length) }, (_, i) => (
               <i key={i} className={i < pin.length ? "on" : ""} />
             ))}
           </div>
@@ -124,10 +163,11 @@ export default function Login() {
               ),
             )}
           </div>
-          <button className="btn key go" disabled={busy || locked || pin.length < 4} onClick={() => submit(pin)}>
+          <button className="btn key go" disabled={busy || locked || pin.length < 6} onClick={() => submit(pin)}>
             {busy ? <span className="pulse">กำลังตรวจสอบ…</span> : "เข้าเลย 💖"}
           </button>
           {err && <div className="err pop-in" role="alert">{err} 🥺</div>}
+          <p className="login-foot">ยังไม่มีบัญชี? <a href="/signup">สมัครใช้งาน</a></p>
         </div>
       </main>
     </>
