@@ -15,8 +15,8 @@ export function iconFor(category: string, type: "income" | "expense") {
   return type === "income" ? "💰" : "🌸";
 }
 
-// sweet categorical palette (charts) — readable on light and dark
-export const PALETTE = ["#ff7eb3", "#b49bff", "#ffb36b", "#5fd0a8", "#7cb8ff", "#ff9a8b", "#e58fe0", "#f5cf5b", "#8fd3e8", "#c9a38f"];
+// categorical palette (charts) — readable on light and dark
+export const PALETTE = ["#2b5fa6", "#4f9d7a", "#d9a441", "#c0504d", "#7a6bb0", "#3b9aa8", "#d9843f", "#7b8fb8", "#8a9a5b", "#9a7b6b"];
 
 // pastel bubble behind category icons
 const TINTS = ["#ffe1ee", "#ece4ff", "#ffecd9", "#dcf6ec", "#e1efff", "#ffe4df", "#fbe2fa", "#fff3cf", "#dff3f9", "#f1e6df"];

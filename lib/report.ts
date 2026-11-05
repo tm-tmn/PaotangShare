@@ -15,19 +15,19 @@ export interface ReportInput {
 
 // ---------- palette ----------
 const C = {
-  pink: "#ff8fc0",
-  pinkDeep: "#e0508e",
-  lav: "#b99cff",
-  lavDeep: "#6b4f9e",
-  mint: "#5fd0a8",
-  mintDeep: "#1f9d6b",
-  amber: "#ffb36b",
-  text: "#5b3a55",
-  muted: "#9a7d94",
-  line: "#f1dce8",
-  zebra: "#fff7fb",
+  pink: "#2b5fa6",
+  pinkDeep: "#163a6b",
+  lav: "#163a6b",
+  lavDeep: "#1f4e8c",
+  mint: "#4fb08a",
+  mintDeep: "#0f7a55",
+  amber: "#d9a441",
+  text: "#1c2b45",
+  muted: "#66758c",
+  line: "#dde3ec",
+  zebra: "#f6f8fb",
 };
-const CAT_COLORS = ["#ff7eb3", "#b49bff", "#ffb36b", "#5fd0a8", "#7cb8ff", "#ff9a8b", "#e58fe0", "#f5cf5b", "#8fd3e8", "#c9a38f"];
+const CAT_COLORS = ["#2b5fa6", "#4f9d7a", "#d9a441", "#c0504d", "#7a6bb0", "#3b9aa8", "#d9843f", "#7b8fb8", "#8a9a5b", "#9a7b6b"];
 
 // ---------- page geometry ----------
 const W = 595.28;
@@ -137,25 +137,25 @@ function shape(doc: Doc, d: string, cx: number, cy: number, size: number, color:
 function piggy(doc: Doc, cx: number, cy: number) {
   doc.save();
   // ears
-  doc.fillColor("#ffb6d3").path(`M${cx - 30},${cy - 18} L${cx - 20},${cy - 40} L${cx - 6},${cy - 26} Z`).fill();
-  doc.fillColor("#ffb6d3").path(`M${cx + 30},${cy - 18} L${cx + 20},${cy - 40} L${cx + 6},${cy - 26} Z`).fill();
+  doc.fillColor("#8fb0e0").path(`M${cx - 30},${cy - 18} L${cx - 20},${cy - 40} L${cx - 6},${cy - 26} Z`).fill();
+  doc.fillColor("#8fb0e0").path(`M${cx + 30},${cy - 18} L${cx + 20},${cy - 40} L${cx + 6},${cy - 26} Z`).fill();
   // head
-  doc.circle(cx, cy, 34).fillColor("#fff4f9").fill();
-  doc.circle(cx, cy, 34).lineWidth(2).strokeColor("#ffd0e4").stroke();
+  doc.circle(cx, cy, 34).fillColor("#eef3fb").fill();
+  doc.circle(cx, cy, 34).lineWidth(2).strokeColor("#c3d4ee").stroke();
   // cheeks
-  doc.circle(cx - 22, cy + 6, 6).fillOpacity(0.55).fill("#ff9fc6").fillOpacity(1);
-  doc.circle(cx + 22, cy + 6, 6).fillOpacity(0.55).fill("#ff9fc6").fillOpacity(1);
+  doc.circle(cx - 22, cy + 6, 6).fillOpacity(0.55).fill("#6b9bd6").fillOpacity(1);
+  doc.circle(cx + 22, cy + 6, 6).fillOpacity(0.55).fill("#6b9bd6").fillOpacity(1);
   // eyes
-  doc.circle(cx - 14, cy - 8, 3.2).fill("#5b3a55");
-  doc.circle(cx + 14, cy - 8, 3.2).fill("#5b3a55");
+  doc.circle(cx - 14, cy - 8, 3.2).fill("#1c2b45");
+  doc.circle(cx + 14, cy - 8, 3.2).fill("#1c2b45");
   doc.circle(cx - 13, cy - 9, 1).fill("#ffffff");
   doc.circle(cx + 15, cy - 9, 1).fill("#ffffff");
   // snout
-  doc.ellipse(cx, cy + 10, 14, 10).fill("#ffb6d3");
-  doc.ellipse(cx - 5, cy + 10, 2.2, 3.2).fill("#e0508e");
-  doc.ellipse(cx + 5, cy + 10, 2.2, 3.2).fill("#e0508e");
+  doc.ellipse(cx, cy + 10, 14, 10).fill("#8fb0e0");
+  doc.ellipse(cx - 5, cy + 10, 2.2, 3.2).fill("#163a6b");
+  doc.ellipse(cx + 5, cy + 10, 2.2, 3.2).fill("#163a6b");
   // coin slot on top
-  doc.roundedRect(cx - 9, cy - 33, 18, 4, 2).fill("#e0508e");
+  doc.roundedRect(cx - 9, cy - 33, 18, 4, 2).fill("#163a6b");
   doc.restore();
 }
 
@@ -270,9 +270,9 @@ export function buildReport(input: ReportInput): Promise<Buffer> {
     const gap = 12;
     const w = (CW - 2 * gap) / 3;
     const defs = [
-      { label: "รายรับ", val: money(income), sub: `${range.filter((t) => t.type === "income").length} รายการ`, bg: "#e4f8ee", bd: "#bfeedb", fg: C.mintDeep, icon: "up" },
-      { label: "รายจ่าย", val: money(expense), sub: `${range.filter((t) => t.type === "expense").length} รายการ`, bg: "#ffe6f1", bd: "#ffc6df", fg: C.pinkDeep, icon: "down" },
-      { label: "คงเหลือ", val: (net < 0 ? "-" : "") + money(Math.abs(net)), sub: net < 0 ? "จ่ายมากกว่ารับ" : "รับมากกว่าจ่าย", bg: "#efe8ff", bd: "#d8c9ff", fg: C.lavDeep, icon: "heart" },
+      { label: "รายรับ", val: money(income), sub: `${range.filter((t) => t.type === "income").length} รายการ`, bg: "#e6f4ee", bd: "#bfe0d0", fg: C.mintDeep, icon: "up" },
+      { label: "รายจ่าย", val: money(expense), sub: `${range.filter((t) => t.type === "expense").length} รายการ`, bg: "#fbe9e7", bd: "#f0c4be", fg: C.pinkDeep, icon: "down" },
+      { label: "คงเหลือ", val: (net < 0 ? "-" : "") + money(Math.abs(net)), sub: net < 0 ? "จ่ายมากกว่ารับ" : "รับมากกว่าจ่าย", bg: "#e6edf8", bd: "#c3d4ee", fg: C.lavDeep, icon: "heart" },
     ];
     defs.forEach((d, i) => {
       const x = M + i * (w + gap);
@@ -288,11 +288,11 @@ export function buildReport(input: ReportInput): Promise<Buffer> {
   }
 
   function bar(x: number, yy: number, w: number, frac: number, color: string, h = 9) {
-    rrect(doc, x, yy, w, h, h / 2, "#f6e9f0");
+    rrect(doc, x, yy, w, h, h / 2, "#e9eef6");
     const fw = Math.max(0, Math.min(1, frac)) * w;
     if (fw > 0) rrect(doc, x, yy, Math.max(fw, h), h, h / 2, color);
   }
-  const pctColor = (p: number) => (p >= 100 ? "#ff6f91" : p >= 80 ? C.amber : C.mint);
+  const pctColor = (p: number) => (p >= 100 ? "#d9534f" : p >= 80 ? C.amber : C.mint);
 
   function limitCard() {
     const lim = settings.monthlyLimit || 0;
@@ -301,7 +301,7 @@ export function buildReport(input: ReportInput): Promise<Buffer> {
     const pct = Math.round((monthExpense / lim) * 100);
     rrect(doc, M, y, CW, 62, 18, "#fffaf0", "#ffe3b8");
     text(`วงเงินใช้จ่าย ${monthName(ym)}`, M + 16, y + 9, { font: "b", size: 11.5, color: "#b87a1c" });
-    text(`${money(monthExpense)} / ${money(lim)} บาท  (${pct}%)`, M + 16, y + 10, { font: "m", size: 10, color: pctColor(pct) === C.mint ? C.mintDeep : "#c2456b", w: CW - 32, align: "right" });
+    text(`${money(monthExpense)} / ${money(lim)} บาท  (${pct}%)`, M + 16, y + 10, { font: "m", size: 10, color: pctColor(pct) === C.mint ? C.mintDeep : "#a93226", w: CW - 32, align: "right" });
     bar(M + 16, y + 30, CW - 32, monthExpense / lim, pctColor(pct), 10);
     text(monthExpense > lim ? `เกินวงเงินไป ${money(monthExpense - lim)} บาท` : `เหลือใช้ได้อีก ${money(lim - monthExpense)} บาท`, M + 16, y + 45, { size: 9, color: C.muted });
     y += 62 + 16;
@@ -355,7 +355,7 @@ export function buildReport(input: ReportInput): Promise<Buffer> {
       text(fit(doc, cat, 132), M + 20, y + 2, { font: "m", size: 10.5 });
       bar(M + 160, y + 5, 190, used / bud, pctColor(pct));
       text(`${money(used)} / ${money(bud)}`, M + 355, y + 2, { font: "m", size: 10, w: 100, align: "right" });
-      text(`${pct}%`, M + 462, y + 3, { size: 9.5, color: pct >= 100 ? "#c2456b" : C.muted, w: CW - 462, align: "right" });
+      text(`${pct}%`, M + 462, y + 3, { size: 9.5, color: pct >= 100 ? "#a93226" : C.muted, w: CW - 462, align: "right" });
       y += 25;
     });
     y += 8;
@@ -380,7 +380,7 @@ export function buildReport(input: ReportInput): Promise<Buffer> {
     ensure(70);
     section("รายการทั้งหมด", `${range.length} รายการ`);
     if (!range.length) {
-      rrect(doc, M, y, CW, 70, 18, "#fff7fb", C.line);
+      rrect(doc, M, y, CW, 70, 18, "#f6f8fb", C.line);
       text("ไม่มีรายการในช่วงนี้ — พักกระเป๋าตังค์ได้เลย ♡", M, y + 26, { font: "m", size: 12, color: C.muted, w: CW, align: "center" });
       y += 86;
       return;
@@ -404,7 +404,7 @@ export function buildReport(input: ReportInput): Promise<Buffer> {
         const day = range.filter((x) => x.date === t.date);
         const di = sum(day, "income");
         const de = sum(day, "expense");
-        rrect(doc, M, y, CW, 22, 11, "#f1eaff");
+        rrect(doc, M, y, CW, 22, 11, "#e8eef8");
         text(dDay(t.date), M + 12, y + 4, { font: "b", size: 10.5, color: C.lavDeep });
         const tot = [di ? `รับ +${money(di)}` : "", de ? `จ่าย -${money(de)}` : ""].filter(Boolean).join("   ");
         text(tot, M + 12, y + 5, { size: 9, color: C.muted, w: CW - 24, align: "right" });
@@ -415,7 +415,7 @@ export function buildReport(input: ReportInput): Promise<Buffer> {
         newPage();
         tableHead();
         // repeat the day label on a continuation page
-        rrect(doc, M, y, CW, 22, 11, "#f1eaff");
+        rrect(doc, M, y, CW, 22, 11, "#e8eef8");
         text(`${dDay(t.date)} (ต่อ)`, M + 12, y + 4, { font: "b", size: 10.5, color: C.lavDeep });
         y += 25;
       }
@@ -435,7 +435,7 @@ export function buildReport(input: ReportInput): Promise<Buffer> {
     // grand total
     ensure(44);
     y += 6;
-    rrect(doc, M, y, CW, 34, 17, "#fff0f7", "#ffc6df");
+    rrect(doc, M, y, CW, 34, 17, "#eef3fb", "#c3d4ee");
     text("รวมทั้งช่วง", M + 16, y + 8, { font: "b", size: 11, color: C.pinkDeep });
     text(`รับ +${money(income)}    จ่าย -${money(expense)}    คงเหลือ ${net < 0 ? "-" : ""}${money(Math.abs(net))}`, M + 16, y + 9, { font: "m", size: 10.5, w: CW - 32, align: "right" });
     y += 40;

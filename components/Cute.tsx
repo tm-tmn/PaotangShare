@@ -7,9 +7,9 @@ export function Piggy({ size = 96, mood = "happy", className = "" }: { size?: nu
     <svg width={size} height={size} viewBox="0 0 120 120" className={`piggy ${className}`} aria-hidden="true">
       <defs>
         <radialGradient id="pg-body" cx="45%" cy="38%" r="70%">
-          <stop offset="0%" stopColor="#ffe3ef" />
-          <stop offset="70%" stopColor="#ffb3d1" />
-          <stop offset="100%" stopColor="#ff94bd" />
+          <stop offset="0%" stopColor="#e3ecf8" />
+          <stop offset="70%" stopColor="#a9c4ea" />
+          <stop offset="100%" stopColor="#7fa6dc" />
         </radialGradient>
       </defs>
       {/* coin */}
@@ -18,49 +18,49 @@ export function Piggy({ size = 96, mood = "happy", className = "" }: { size?: nu
         <text x="60" y="19" textAnchor="middle" fontSize="13" fontWeight="700" fill="#d48f10">฿</text>
       </g>
       {/* ears */}
-      <path d="M30 40 L24 18 L46 30 Z" fill="#ff9cc4" stroke="#f47fae" strokeWidth="2" strokeLinejoin="round" />
-      <path d="M90 40 L96 18 L74 30 Z" fill="#ff9cc4" stroke="#f47fae" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M30 40 L24 18 L46 30 Z" fill="#8fb0e0" stroke="#5f8ccc" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M90 40 L96 18 L74 30 Z" fill="#8fb0e0" stroke="#5f8ccc" strokeWidth="2" strokeLinejoin="round" />
       {/* legs */}
-      <rect x="34" y="88" width="14" height="18" rx="6" fill="#ff9cc4" />
-      <rect x="72" y="88" width="14" height="18" rx="6" fill="#ff9cc4" />
+      <rect x="34" y="88" width="14" height="18" rx="6" fill="#8fb0e0" />
+      <rect x="72" y="88" width="14" height="18" rx="6" fill="#8fb0e0" />
       {/* body */}
-      <ellipse cx="60" cy="64" rx="42" ry="36" fill="url(#pg-body)" stroke="#f47fae" strokeWidth="2" />
+      <ellipse cx="60" cy="64" rx="42" ry="36" fill="url(#pg-body)" stroke="#5f8ccc" strokeWidth="2" />
       {/* coin slot */}
-      <rect x="50" y="30" width="20" height="4" rx="2" fill="#e76aa0" opacity=".7" />
+      <rect x="50" y="30" width="20" height="4" rx="2" fill="#4a78b8" opacity=".7" />
       {/* eyes */}
       {mood === "sleepy" ? (
         <>
-          <path d="M38 56 q5 4 10 0" stroke="#5b2f4d" strokeWidth="3" fill="none" strokeLinecap="round" />
-          <path d="M72 56 q5 4 10 0" stroke="#5b2f4d" strokeWidth="3" fill="none" strokeLinecap="round" />
+          <path d="M38 56 q5 4 10 0" stroke="#1c2b45" strokeWidth="3" fill="none" strokeLinecap="round" />
+          <path d="M72 56 q5 4 10 0" stroke="#1c2b45" strokeWidth="3" fill="none" strokeLinecap="round" />
         </>
       ) : mood === "wink" ? (
         <>
-          <circle cx="43" cy="55" r="4.5" fill="#5b2f4d" />
+          <circle cx="43" cy="55" r="4.5" fill="#1c2b45" />
           <circle cx="44.5" cy="53.5" r="1.4" fill="#fff" />
-          <path d="M72 56 q5 -4 10 0" stroke="#5b2f4d" strokeWidth="3" fill="none" strokeLinecap="round" />
+          <path d="M72 56 q5 -4 10 0" stroke="#1c2b45" strokeWidth="3" fill="none" strokeLinecap="round" />
         </>
       ) : (
         <g className="piggy-eyes">
-          <circle cx="43" cy="55" r={mood === "wow" ? 5.5 : 4.5} fill="#5b2f4d" />
-          <circle cx="77" cy="55" r={mood === "wow" ? 5.5 : 4.5} fill="#5b2f4d" />
+          <circle cx="43" cy="55" r={mood === "wow" ? 5.5 : 4.5} fill="#1c2b45" />
+          <circle cx="77" cy="55" r={mood === "wow" ? 5.5 : 4.5} fill="#1c2b45" />
           <circle cx="44.5" cy="53.5" r="1.5" fill="#fff" />
           <circle cx="78.5" cy="53.5" r="1.5" fill="#fff" />
         </g>
       )}
       {/* blush */}
-      <ellipse cx="34" cy="67" rx="7" ry="4" fill="#ff7aa8" opacity=".45" />
-      <ellipse cx="86" cy="67" rx="7" ry="4" fill="#ff7aa8" opacity=".45" />
+      <ellipse cx="34" cy="67" rx="7" ry="4" fill="#6b9bd6" opacity=".45" />
+      <ellipse cx="86" cy="67" rx="7" ry="4" fill="#6b9bd6" opacity=".45" />
       {/* snout */}
-      <ellipse cx="60" cy="70" rx="14" ry="10" fill="#ff8fbb" stroke="#f47fae" strokeWidth="2" />
-      <ellipse cx="55" cy="70" rx="2.6" ry="3.6" fill="#d9558f" />
-      <ellipse cx="65" cy="70" rx="2.6" ry="3.6" fill="#d9558f" />
+      <ellipse cx="60" cy="70" rx="14" ry="10" fill="#7fa6dc" stroke="#5f8ccc" strokeWidth="2" />
+      <ellipse cx="55" cy="70" rx="2.6" ry="3.6" fill="#3f6aa8" />
+      <ellipse cx="65" cy="70" rx="2.6" ry="3.6" fill="#3f6aa8" />
       {mood === "wow" ? (
-        <ellipse cx="60" cy="86" rx="4" ry="4.5" fill="#d9558f" />
+        <ellipse cx="60" cy="86" rx="4" ry="4.5" fill="#3f6aa8" />
       ) : (
-        <path d="M54 84 q6 5 12 0" stroke="#d9558f" strokeWidth="2.5" fill="none" strokeLinecap="round" />
+        <path d="M54 84 q6 5 12 0" stroke="#3f6aa8" strokeWidth="2.5" fill="none" strokeLinecap="round" />
       )}
       {/* tiny heart */}
-      <path className="piggy-heart" d="M98 74 c0-4 6-5 6 0 c0-5 6-4 6 0 c0 4-6 7-6 9 c0-2-6-5-6-9z" fill="#ff5c93" />
+      <path className="piggy-heart" d="M98 74 c0-4 6-5 6 0 c0-5 6-4 6 0 c0 4-6 7-6 9 c0-2-6-5-6-9z" fill="#e5566d" />
     </svg>
   );
 }

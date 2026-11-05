@@ -15,7 +15,7 @@ const MONTHS_FULL = [
 export const WEEKDAYS = ["อาทิตย์", "จันทร์", "อังคาร", "พุธ", "พฤหัสบดี", "ศุกร์", "เสาร์"];
 export const WEEKDAYS_SHORT = ["อา.", "จ.", "อ.", "พ.", "พฤ.", "ศ.", "ส."];
 // สีประจำวันแบบไทย (pastel)
-export const WEEKDAY_COLORS = ["#ff8a9a", "#f7cf4a", "#ff9fcf", "#7fd6a4", "#ffb070", "#8cc3ff", "#b99cff"];
+export const WEEKDAY_COLORS = ["#d9736f", "#e0b84e", "#8fa3cc", "#5fb08a", "#e09a5c", "#5f98d4", "#8a7cc0"];
 
 const parse = (iso: string) => {
   const [y, m, d] = iso.split("-").map(Number);
