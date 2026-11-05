@@ -541,6 +541,7 @@ small.ok { color: var(--muted); }
 .pin-dots { display: flex; gap: 12px; justify-content: center; margin-bottom: 18px; min-height: 16px; }
 .pin-dots i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--pink); transition: background .2s, transform .25s var(--spring); }
 .pin-dots i.on { background: var(--grad-btn); border-color: transparent; transform: scale(1.15); }
+.login-pin-label { margin: 14px 0 10px; font-size: 13px; color: var(--muted); text-align: center; }
 .shake { animation: shake .45s ease; }
 @keyframes shake { 20%, 60% { transform: translateX(-9px); } 40%, 80% { transform: translateX(9px); } }
 .keypad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; width: 100%; }

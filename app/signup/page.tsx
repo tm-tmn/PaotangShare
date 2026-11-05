@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import PinField from "@/components/PinField";
 import { BgDeco, Piggy } from "@/components/Cute";
 
 export default function Signup() {
@@ -16,7 +17,7 @@ export default function Signup() {
     setErr("");
     if (!name.trim()) return setErr("กรุณาใส่ชื่อ");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return setErr("อีเมลไม่ถูกต้อง");
-    if (pass.length < 8) return setErr("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+    if (!/^\d{6}$/.test(pass)) return setErr("รหัสผ่านต้องเป็นตัวเลข 6 หลัก");
     if (pass !== pass2) return setErr("รหัสผ่านสองช่องไม่ตรงกัน");
     setBusy(true);
     try {
@@ -55,10 +56,10 @@ export default function Signup() {
               <input id="su-name" className="in" autoComplete="nickname" value={name} onChange={(e) => setName(e.target.value)} maxLength={60} />
               <label htmlFor="su-email">อีเมล (ใช้เข้าสู่ระบบ และรับสรุปรายสัปดาห์)</label>
               <input id="su-email" className="in" type="email" inputMode="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} />
-              <label htmlFor="su-pass">ตั้งรหัสผ่าน (อย่างน้อย 8 ตัวอักษร)</label>
-              <input id="su-pass" className="in" type="password" autoComplete="new-password" value={pass} onChange={(e) => setPass(e.target.value)} />
+              <label htmlFor="su-pass">ตั้งรหัสผ่าน (ตัวเลข 6 หลัก)</label>
+              <PinField id="su-pass" value={pass} onChange={setPass} />
               <label htmlFor="su-pass2">ยืนยันรหัสผ่านอีกครั้ง</label>
-              <input id="su-pass2" className="in" type="password" autoComplete="new-password" value={pass2} onChange={(e) => setPass2(e.target.value)} />
+              <PinField id="su-pass2" value={pass2} onChange={setPass2} />
               <button className="btn" type="submit" disabled={busy}>{busy ? "กำลังสมัคร…" : "สมัครใช้งาน"}</button>
               {err && <div className="err pop-in" role="alert">{err}</div>}
               <p className="hint">ข้อมูลรายการและรูปสลิปของคุณจะเก็บไว้ในระบบของผู้ดูแลแอปนี้ ผู้ดูแลสามารถเข้าถึงได้</p>

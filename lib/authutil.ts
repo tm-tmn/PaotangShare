@@ -1,4 +1,7 @@
-export const validPassword = (p: unknown): p is string => typeof p === "string" && p.length >= 8 && p.length <= 72;
+// the login "password" is a 6-digit PIN (typed on the keypad); Supabase's minimum length is 6
+export const PIN_LEN = 6;
+export const PIN_MSG = "รหัสผ่านต้องเป็นตัวเลข 6 หลัก";
+export const validPassword = (p: unknown): p is string => typeof p === "string" && /^\d{6}$/.test(p);
 
 /** where e-mail links should point: the address the visitor used (works for custom domains and previews) */
 export function appOrigin(req: Request): string {

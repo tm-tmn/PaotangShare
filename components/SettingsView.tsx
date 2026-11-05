@@ -98,13 +98,13 @@ function AccountCards({ me, scanEnabled, onMe }: { me: Me | null; scanEnabled: b
         <Note card="name" />
         <h4 style={{ margin: "14px 0 6px" }}>🔑 เปลี่ยนรหัสผ่านเข้าใช้งาน</h4>
         <div className="date-row">
-          <input className="in" type="password" autoComplete="current-password" placeholder="รหัสผ่านปัจจุบัน" aria-label="รหัสผ่านปัจจุบัน" value={cur} onChange={(e) => setCur(e.target.value)} />
-          <input className="in" type="password" autoComplete="new-password" placeholder="รหัสผ่านใหม่ 8+ ตัว" aria-label="รหัสผ่านใหม่" value={next} onChange={(e) => setNext(e.target.value)} />
+          <input className="in" type="password" inputMode="numeric" autoComplete="current-password" placeholder="รหัสผ่านปัจจุบัน" aria-label="รหัสผ่านปัจจุบัน" value={cur} onChange={(e) => setCur(e.target.value)} />
+          <input className="in" type="password" inputMode="numeric" autoComplete="new-password" placeholder="รหัสผ่านใหม่ (ตัวเลข 6 หลัก)" aria-label="รหัสผ่านใหม่" maxLength={6} value={next} onChange={(e) => setNext(e.target.value.replace(/\D/g, "").slice(0, 6))} />
         </div>
         <button
           className="btn ghost"
           style={{ marginTop: 10 }}
-          disabled={busy === "pw" || !cur || next.length < 8}
+          disabled={busy === "pw" || !cur || next.length !== 6}
           onClick={async () => {
             if (await patch("pw", { currentPassword: cur, newPassword: next }, "เปลี่ยนรหัสผ่านแล้ว — ครั้งหน้าใช้รหัสผ่านใหม่")) {
               setCur("");

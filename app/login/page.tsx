@@ -1,10 +1,13 @@
 "use client";
-import { useEffect, useState } from "react";
+import { Delete } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BgDeco, Piggy } from "@/components/Cute";
 
 const EMAIL_KEY = "pt-email";
 const CACHE_KEY = "pt-cache-v1";
 const OWNER_KEY = "pt-cache-owner"; // whose list is in the offline cache
+const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "", "0", "del"];
+const LEN = 6;
 const validEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
 export default function Login() {
@@ -24,13 +27,16 @@ export default function Login() {
     if (q.has("registered")) setNote("สมัครเรียบร้อย — ยืนยันอีเมลแล้วเข้าสู่ระบบได้เลย");
   }, []);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
+  const emailRef = useRef(email);
+  emailRef.current = email;
+  const [shake, setShake] = useState(0);
+
+  const submit = useCallback(async (password: string) => {
     if (busy) return;
     setErr("");
     setNote("");
-    if (!validEmail(email)) return setErr("กรุณาใส่อีเมลให้ถูกต้อง");
-    if (!password) return setErr("กรุณาใส่รหัสผ่าน");
+    const email = emailRef.current;
+    if (!validEmail(email)) { setPassword(""); return setErr("กรุณาใส่อีเมลให้ถูกต้อง"); }
     setBusy(true);
     try {
       const res = await fetch("/api/auth/login", {
@@ -53,10 +59,34 @@ export default function Login() {
       location.replace("/");
     } catch (e2) {
       setErr((e2 as Error).message);
+      setShake(Date.now());
       setPassword("");
       setBusy(false);
     }
-  }
+  }, [busy]);
+
+  const press = useCallback((k: string) => {
+    if (busy) return;
+    setErr("");
+    if (k === "del") return setPassword((p) => p.slice(0, -1));
+    if (!k) return;
+    setPassword((p) => {
+      const n = p.length < LEN ? p + k : p;
+      if (n.length === LEN && n !== p) setTimeout(() => submit(n), 120); // auto-enter on the 6th digit
+      return n;
+    });
+  }, [busy, submit]);
+
+  // physical keyboard digits work too (but not while typing the e-mail)
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+      if (/^\d$/.test(e.key)) press(e.key);
+      else if (e.key === "Backspace") press("del");
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  }, [press]);
 
   return (
     <>
@@ -65,12 +95,27 @@ export default function Login() {
         <div className="login-card glass-strong pop-in signup-card">
           <Piggy size={96} mood={err ? "wow" : "wink"} className="bob center" />
           <h1>เป๋าตังค์</h1>
-          <form onSubmit={submit} noValidate>
+          <form onSubmit={(e) => { e.preventDefault(); submit(password); }} noValidate>
             <label htmlFor="li-email">อีเมล</label>
             <input id="li-email" className="in" type="email" inputMode="email" autoComplete="username" value={email} onChange={(e) => { setEmail(e.target.value); setErr(""); }} />
-            <label htmlFor="li-pass">รหัสผ่าน</label>
-            <input id="li-pass" className="in" type="password" autoComplete="current-password" value={password} onChange={(e) => { setPassword(e.target.value); setErr(""); }} />
-            <button className="btn" type="submit" disabled={busy}>{busy ? <span className="pulse">กำลังตรวจสอบ…</span> : "เข้าสู่ระบบ"}</button>
+            <p className="login-pin-label">รหัสผ่าน (ตัวเลข 6 หลัก)</p>
+            <div className={`pin-dots ${shake ? "shake" : ""}`} key={shake} aria-live="polite" aria-label={`ใส่แล้ว ${password.length} หลัก`}>
+              {Array.from({ length: LEN }, (_, i) => (
+                <i key={i} className={i < password.length ? "on" : ""} />
+              ))}
+            </div>
+            <div className="keypad">
+              {KEYS.map((k, i) =>
+                k === "" ? (
+                  <span key={i} />
+                ) : (
+                  <button key={i} type="button" className={`key ${k === "del" ? "del" : ""}`} onClick={() => press(k)} aria-label={k === "del" ? "ลบ" : k} disabled={busy}>
+                    {k === "del" ? <Delete size={22} /> : k}
+                  </button>
+                ),
+              )}
+            </div>
+            {busy && <p className="hint center"><span className="pulse">กำลังตรวจสอบ…</span></p>}
             {note && <div className="ok pop-in" role="status">{note}</div>}
             {err && <div className="err pop-in" role="alert">{err}</div>}
             {unconfirmed && <p className="hint">ไม่พบอีเมล? ดูในโฟลเดอร์สแปม หรือสมัครอีกครั้งด้วยอีเมลเดิมเพื่อส่งลิงก์ใหม่</p>}

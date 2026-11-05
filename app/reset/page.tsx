@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import PinField from "@/components/PinField";
 import { BgDeco, Piggy } from "@/components/Cute";
 
 // reached from the e-mail link (/auth/confirm signs the person in with the recovery token first)
@@ -12,7 +13,7 @@ export default function Reset() {
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
-    if (pass.length < 8) return setErr("รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร");
+    if (!/^\d{6}$/.test(pass)) return setErr("รหัสผ่านต้องเป็นตัวเลข 6 หลัก");
     if (pass !== pass2) return setErr("รหัสผ่านสองช่องไม่ตรงกัน");
     setBusy(true);
     try {
@@ -40,10 +41,10 @@ export default function Reset() {
           <Piggy size={88} mood={err ? "wow" : "wink"} className="bob center" />
           <h1>ตั้งรหัสผ่านใหม่</h1>
           <form onSubmit={submit} noValidate>
-            <label htmlFor="rs-pass">รหัสผ่านใหม่ (อย่างน้อย 8 ตัวอักษร)</label>
-            <input id="rs-pass" className="in" type="password" autoComplete="new-password" value={pass} onChange={(e) => setPass(e.target.value)} />
+            <label htmlFor="rs-pass">รหัสผ่านใหม่ (ตัวเลข 6 หลัก)</label>
+            <PinField id="rs-pass" value={pass} onChange={setPass} />
             <label htmlFor="rs-pass2">ยืนยันรหัสผ่านอีกครั้ง</label>
-            <input id="rs-pass2" className="in" type="password" autoComplete="new-password" value={pass2} onChange={(e) => setPass2(e.target.value)} />
+            <PinField id="rs-pass2" value={pass2} onChange={setPass2} />
             <button className="btn" type="submit" disabled={busy}>{busy ? "กำลังบันทึก…" : "บันทึกรหัสผ่านใหม่"}</button>
             {err && <div className="err pop-in" role="alert">{err}</div>}
           </form>

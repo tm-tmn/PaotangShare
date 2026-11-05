@@ -22,7 +22,7 @@ export async function PATCH(req: Request) {
       patch.name = name;
     }
     if (body.newPassword !== undefined) {
-      if (!validPassword(body.newPassword)) throw new StoreError("รหัสผ่านใหม่ต้องยาวอย่างน้อย 8 ตัวอักษร", 400);
+      if (!validPassword(body.newPassword)) throw new StoreError("รหัสผ่านใหม่ต้องเป็นตัวเลข 6 หลัก", 400);
       // re-check the current password with a throw-away client so this session's cookies are not touched
       const { url, key } = supaEnv();
       const probe = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });

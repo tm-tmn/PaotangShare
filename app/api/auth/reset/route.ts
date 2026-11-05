@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { validPassword } from "@/lib/authutil";
+import { PIN_MSG, validPassword } from "@/lib/authutil";
 import { supaForRequest } from "@/lib/supa";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const body = await req.json().catch(() => ({}));
-    if (!validPassword(body?.password)) return NextResponse.json({ error: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร" }, { status: 400 });
+    if (!validPassword(body?.password)) return NextResponse.json({ error: PIN_MSG }, { status: 400 });
     const { sb, apply } = supaForRequest(req);
     const { data: u } = await sb.auth.getUser();
     if (!u?.user) return NextResponse.json({ error: "ลิงก์หมดอายุหรือใช้ไปแล้ว — กด “ลืมรหัสผ่าน” เพื่อขอลิงก์ใหม่" }, { status: 401 });

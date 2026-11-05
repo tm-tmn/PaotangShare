@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { supaForRequest } from "@/lib/supa";
-import { validPassword, appOrigin } from "@/lib/authutil";
+import { PIN_MSG, validPassword, appOrigin } from "@/lib/authutil";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,7 @@ export async function POST(req: Request) {
     const password = body?.password;
     if (!EMAIL.test(email)) return NextResponse.json({ error: "อีเมลไม่ถูกต้อง" }, { status: 400 });
     if (!name) return NextResponse.json({ error: "กรุณาใส่ชื่อ" }, { status: 400 });
-    if (!validPassword(password)) return NextResponse.json({ error: "รหัสผ่านต้องยาวอย่างน้อย 8 ตัวอักษร" }, { status: 400 });
+    if (!validPassword(password)) return NextResponse.json({ error: PIN_MSG }, { status: 400 });
     const { sb, apply } = supaForRequest(req);
     const { data, error } = await sb.auth.signUp({
       email,
