@@ -33,7 +33,7 @@ async function call<T>(action: string, payload: Record<string, unknown> = {}): P
         : `Apps Script error ${res.status}`,
     );
   }
-  if (data.error === "user_inactive") throw new StoreError("บัญชีนี้ยังไม่ได้รับอนุมัติ หรือถูกระงับ — ติดต่อผู้ดูแล", 401);
+  if (data.error === "user_inactive") throw new StoreError("บัญชียังไม่พร้อมใช้งาน หรือถูกระงับ — ลองรีเฟรชหน้านี้ หรือติดต่อผู้ดูแล", 403);
   if (data.error === "unauthorized") throw new StoreError("APPS_SCRIPT_SECRET ไม่ตรงกับรหัสลับในสคริปต์ — ใน Apps Script เลือกฟังก์ชัน showSecret แล้วกด Run เพื่อดูรหัสที่ถูกต้อง (ถ้ายังไม่เคย Run setup ให้ Run setup ก่อน)", 500);
   if (data.error === "unknown action")
     throw new StoreError("Apps Script ยังเป็นเวอร์ชันเก่า — วางโค้ด apps-script/Code.gs ใหม่แล้ว Deploy เป็น New version");
@@ -51,11 +51,12 @@ export interface UserPublic {
   id: string;
   email: string;
   name: string;
-  status: "pending" | "active" | "suspended";
+  status: "active" | "suspended";
   role: "admin" | "user";
   createdAt: string;
   lastLogin: string;
   hasGeminiKey: boolean;
+  hasPdfPass: boolean;
   txCount?: number;
 }
 export interface UserPrivate extends UserPublic {
@@ -66,11 +67,12 @@ export interface UserPrivate extends UserPublic {
 export const ping = () =>
   call<{ ok: boolean; version?: number; multiUser?: boolean; sheet: string; folder: string; users?: number; mailQuota?: number }>("ping");
 
-// ----- accounts -----
+// ----- accounts (login itself is Supabase; this is the per-user row in the Sheet) -----
 export const findUser = async (email: string) => (await call<{ user: UserPrivate | null }>("userFind", { email })).user;
 export const getUser = async (id: string) => (await call<{ user: UserPrivate | null }>("userGet", { id })).user;
-export const createUser = async (user: { email: string; name: string; pinEnc: string; status: "pending" | "active"; role: "admin" | "user" }) =>
+export const createUser = async (user: { id: string; email: string; name: string; status: "active" | "suspended"; role: "admin" | "user" }) =>
   (await call<{ user: UserPublic }>("userCreate", { user })).user;
+// pinEnc holds the encrypted PDF password the user chose
 export const updateUser = async (id: string, patch: Partial<Pick<UserPrivate, "name" | "status" | "role" | "pinEnc" | "geminiKey" | "lastLogin">>) =>
   (await call<{ user: UserPublic }>("userUpdate", { id, patch })).user;
 export const listUsers = async () => (await call<{ users: UserPublic[] }>("userList")).users;
@@ -106,5 +108,3 @@ export async function saveSettings(uid: string, settings: Settings, appUrl?: str
 export const testEmail = (uid: string, appUrl?: string) =>
   call<{ ok: boolean; to: string; pdf?: boolean }>("testEmail", { uid, appUrl });
 
-export const authOp = (key: string, op: "status" | "fail" | "ok") =>
-  call<{ locked: boolean; lockUntil: number; remaining: number }>("auth", { key, op });

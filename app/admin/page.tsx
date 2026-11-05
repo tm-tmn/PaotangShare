@@ -7,14 +7,14 @@ interface U {
   id: string;
   email: string;
   name: string;
-  status: "pending" | "active" | "suspended";
+  status: "active" | "suspended";
   role: "admin" | "user";
   createdAt: string;
   lastLogin: string;
   txCount?: number;
 }
 
-const STATUS = { pending: "รออนุมัติ", active: "ใช้งานอยู่", suspended: "ระงับ" } as const;
+const STATUS = { active: "ใช้งานอยู่", suspended: "ระงับ" } as const;
 const when = (iso: string) => {
   const d = new Date(iso);
   return isNaN(d.getTime()) ? "–" : d.toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "2-digit" });
@@ -25,7 +25,6 @@ export default function Admin() {
   const [me, setMe] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState("");
-  const [temp, setTemp] = useState<{ email: string; pin: string } | null>(null);
   const [filter, setFilter] = useState<"all" | U["status"]>("all");
 
   const load = useCallback(async () => {
@@ -54,7 +53,6 @@ export default function Admin() {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "ทำรายการไม่สำเร็จ");
-      if (data.tempPin) setTemp({ email: u.email, pin: data.tempPin });
       await load();
     } catch (e) {
       setErr((e as Error).message);
@@ -64,13 +62,13 @@ export default function Admin() {
   }
 
   const counts = useMemo(() => {
-    const c = { all: 0, pending: 0, active: 0, suspended: 0 };
+    const c = { all: 0, active: 0, suspended: 0 };
     (users || []).forEach((u) => { c.all++; c[u.status]++; });
     return c;
   }, [users]);
   const shown = (users || [])
     .filter((u) => filter === "all" || u.status === filter)
-    .sort((a, b) => (a.status === "pending" ? -1 : 0) - (b.status === "pending" ? -1 : 0) || a.email.localeCompare(b.email));
+    .sort((a, b) => a.email.localeCompare(b.email));
 
   return (
     <>
@@ -79,20 +77,12 @@ export default function Admin() {
         <a href="/" className="link-btn"><ChevronLeft size={16} /> กลับหน้าหลัก</a>
         <h2>👑 จัดการผู้ใช้</h2>
         <div className="chips">
-          {(["all", "pending", "active", "suspended"] as const).map((k) => (
+          {(["all", "active", "suspended"] as const).map((k) => (
             <button key={k} className={`chip ${filter === k ? "on" : ""}`} onClick={() => setFilter(k)}>
               {k === "all" ? "ทั้งหมด" : STATUS[k]} {counts[k]}
             </button>
           ))}
         </div>
-        {temp && (
-          <section className="panel glass" role="status">
-            <h3>🔑 PIN ชั่วคราวของ {temp.email}</h3>
-            <div className="temp-pin">{temp.pin}</div>
-            <p className="hint">แจ้ง PIN นี้ให้เจ้าของบัญชีทางช่องทางส่วนตัว แล้วให้เขาเปลี่ยน PIN เองในหน้าตั้งค่า — PIN นี้แสดงครั้งเดียว</p>
-            <button className="btn ghost" onClick={() => setTemp(null)}>ปิด</button>
-          </section>
-        )}
         {err && <p className="err" role="alert">{err}</p>}
         <section className="panel glass">
           {users === null && <p className="hint">กำลังโหลด…</p>}
@@ -115,7 +105,7 @@ export default function Admin() {
                   <div className="acts">
                     {u.status !== "active" && (
                       <button className="chip on" disabled={b} onClick={() => act(u, { status: "active" })}>
-                        {u.status === "pending" ? "✓ อนุมัติ" : "เปิดใช้งานอีกครั้ง"}
+                        เปิดใช้งานอีกครั้ง
                       </button>
                     )}
                     {u.status === "active" && (
@@ -126,12 +116,11 @@ export default function Admin() {
                         {u.role === "admin" ? "ถอดสิทธิ์ผู้ดูแล" : "ตั้งเป็นผู้ดูแล"}
                       </button>
                     )}
-                    <button className="chip" disabled={b} onClick={() => confirm(`รีเซ็ต PIN ของ ${u.email}? ระบบจะสร้าง PIN ชั่วคราวให้`) && act(u, { resetPin: true })}>รีเซ็ต PIN</button>
                     <button
                       className="chip danger-text"
                       disabled={b}
                       onClick={() =>
-                        confirm(`ลบบัญชี ${u.email} พร้อมรายการทั้งหมด ${u.txCount ?? 0} รายการ และรูปสลิป?\nลบแล้วกู้คืนรายการไม่ได้ (รูปสลิปอยู่ในถังขยะ Drive 30 วัน)`) &&
+                        confirm(`ลบบัญชี ${u.email} พร้อมรายการทั้งหมด ${u.txCount ?? 0} รายการ และรูปสลิป?\nลบแล้วกู้คืนรายการไม่ได้ (รูปสลิปอยู่ในถังขยะ Drive 30 วัน)\nผู้ใช้ยังล็อกอินด้วยอีเมลเดิมได้ และจะเริ่มต้นใหม่แบบว่างเปล่า`) &&
                         act(u, {}, "DELETE")
                       }
                     >
@@ -143,7 +132,7 @@ export default function Admin() {
             );
           })}
         </section>
-        <p className="hint">ข้อมูลทั้งหมดอยู่ใน Google Sheet และ Drive ของคุณ — <a href="/setup">สถานะการเชื่อมต่อ</a></p>
+        <p className="hint">ผู้ใช้สมัครและยืนยันอีเมลเองได้ ไม่ต้องรออนุมัติ — ที่นี่ใช้ระงับ/ลบเมื่อจำเป็น · ข้อมูลทั้งหมดอยู่ใน Google Sheet และ Drive ของคุณ — <a href="/setup">สถานะการเชื่อมต่อ</a></p>
       </main>
     </>
   );

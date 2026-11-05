@@ -1,6 +1,6 @@
-// PINs are stored in the Sheet encrypted (AES-256-GCM) with a key that only the app server holds.
-// Encryption (not a one-way hash) is needed because each user's PIN is also the password of their PDF reports,
-// which the weekly e-mail job asks the server to build while the user is not around.
+// The PDF password each user chooses is stored in the Sheet encrypted (AES-256-GCM) with a key only the app server holds.
+// Encryption (not a one-way hash) is needed because the weekly e-mail job asks the server to build the user's PDF,
+// protected with that password, while the user is not around. (Login passwords live in Supabase, never here.)
 import crypto from "node:crypto";
 
 function key() {
@@ -28,16 +28,5 @@ export function openPin(box: string): string | null {
   }
 }
 
-/** constant-time string compare (no early exit on the first wrong digit) */
-export function samePin(a: string, b: string) {
-  const len = Math.max(a.length, b.length, 1);
-  let diff = a.length ^ b.length;
-  for (let i = 0; i < len; i++) diff |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
-  return diff === 0;
-}
-
-export const validPin = (p: unknown): p is string => typeof p === "string" && /^\d{6,8}$/.test(p);
-
-export function randomPin() {
-  return String(crypto.randomInt(0, 1_000_000)).padStart(6, "0");
-}
+/** PDF passwords: printable ASCII (PDF encryption is only reliable with that), 6–32 characters */
+export const validPdfPass = (p: unknown): p is string => typeof p === "string" && /^[\x21-\x7e]{6,32}$/.test(p);

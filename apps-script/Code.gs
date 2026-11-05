@@ -1,5 +1,5 @@
 /**
- * เป๋าตังค์ (หลายผู้ใช้) — Apps Script backend (v5)
+ * เป๋าตังค์ (หลายผู้ใช้) — Apps Script backend (v6)
  *
  * ข้อมูลของผู้ใช้ทุกคนเก็บใน Google Sheet นี้ (แท็บ "รายการ" + "ผู้ใช้") และสลิปเก็บใน Google Drive ของเจ้าของสคริปต์
  * (โฟลเดอร์ "เป๋าตังค์ - สลิป" แยกโฟลเดอร์ย่อยตามผู้ใช้)
@@ -19,12 +19,14 @@
  * อัปเดตเป็นเวอร์ชันใหม่: วางโค้ดใหม่ทับ → บันทึก → Run setup อีกครั้ง (รหัสลับเดิมยังอยู่)
  *   → Deploy → Manage deployments → ✏️ → Version: New version → Deploy (URL เดิมใช้ต่อได้)
  *
- * หมายเหตุ: สคริปต์ไม่ตรวจ PIN เอง — แอปบน Vercel (ซึ่งถือรหัสลับ) เป็นผู้ยืนยันตัวตนแล้วส่ง uid มา
+ * หมายเหตุ: สคริปต์ไม่ตรวจรหัสผ่านเอง — บัญชีผู้ใช้ (สมัคร/ยืนยันอีเมล/ลืมรหัส) อยู่ที่ Supabase
+ *   แอปบน Vercel (ซึ่งถือรหัสลับ) ยืนยันตัวตนกับ Supabase แล้วส่ง uid (UUID ของ Supabase) มา
+ *   คอลัมน์ pinEnc ในแท็บ "ผู้ใช้" ตอนนี้เก็บ "รหัสเปิดไฟล์ PDF" ที่ผู้ใช้ตั้งเอง (เข้ารหัสแล้ว)
  */
 
 // รหัสลับเก็บใน Script Properties (สร้างให้อัตโนมัติตอน Run setup) — ไม่ต้องแก้บรรทัดนี้
 const SECRET_OVERRIDE = '';
-const VERSION = 5;
+const VERSION = 6;
 
 const TX_TAB = 'รายการ';
 const USER_TAB = 'ผู้ใช้';
@@ -34,7 +36,6 @@ const NCOL = TX_HEADERS.length;
 const UID_COL = 11; // 0-based index of userId in a transaction row
 const USER_HEADERS = ['id', 'email', 'name', 'status', 'role', 'createdAt', 'lastLogin', 'pinEnc', 'folderId', 'geminiKey', 'settings'];
 const UCOL = USER_HEADERS.length;
-const MAX_PENDING = 100;
 const TZ = 'Asia/Bangkok';
 
 const DEFAULT_SETTINGS = {
@@ -142,8 +143,6 @@ function route_(req) {
       return { users: listUsers_() };
     case 'userDelete':
       return deleteUser_(req.id);
-    case 'auth':
-      return auth_(String(req.key || ''), req.op);
 
     // ----- one user's data -----
     case 'bootstrap': {
@@ -258,7 +257,7 @@ function writeUser_(u) {
 function publicUser_(u) {
   return {
     id: u.id, email: u.email, name: u.name, status: u.status, role: u.role,
-    createdAt: u.createdAt, lastLogin: u.lastLogin, hasGeminiKey: !!u.geminiKey,
+    createdAt: u.createdAt, lastLogin: u.lastLogin, hasGeminiKey: !!u.geminiKey, hasPdfPass: !!u.pinEnc,
   };
 }
 
@@ -281,14 +280,16 @@ function createUser_(input) {
     const email = normEmail_(input && input.email);
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('อีเมลไม่ถูกต้อง');
     const all = users_();
-    if (all.some(function (u) { return u.email === email; })) throw new Error('อีเมลนี้สมัครไว้แล้ว');
-    const status = input.status === 'active' ? 'active' : 'pending';
-    if (status === 'pending' && all.filter(function (u) { return u.status === 'pending'; }).length >= MAX_PENDING) {
-      throw new Error('มีผู้สมัครรออนุมัติจำนวนมาก ลองใหม่ภายหลัง');
-    }
+    // the id is the Supabase user id (UUID); without one we generate it (legacy / tests)
+    const given = String(input.id || '').toLowerCase();
+    if (given && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(given)) throw new Error('รหัสผู้ใช้ไม่ถูกต้อง');
+    const same = all.filter(function (u) { return given && u.id === given; })[0];
+    if (same) return publicUser_(same); // already created (two requests raced)
+    if (all.some(function (u) { return u.email === email; })) throw new Error('อีเมลนี้มีบัญชีอยู่แล้วในระบบ — ติดต่อผู้ดูแล');
+    const status = input.status === 'suspended' ? 'suspended' : 'active';
     const u = {
       row: userSheet_().getLastRow() + 1,
-      id: Utilities.getUuid(),
+      id: given || Utilities.getUuid(),
       email: email,
       name: String(input.name || '').slice(0, 60),
       status: status,
@@ -312,7 +313,7 @@ function updateUser_(id, patch) {
     ['name', 'status', 'role', 'pinEnc', 'geminiKey', 'lastLogin'].forEach(function (k) {
       if (patch && patch[k] !== undefined) u[k] = String(patch[k]).slice(0, k === 'pinEnc' ? 400 : 200);
     });
-    if (['pending', 'active', 'suspended'].indexOf(u.status) < 0) u.status = 'pending';
+    if (['active', 'suspended'].indexOf(u.status) < 0) u.status = 'active';
     if (u.role !== 'admin') u.role = 'user';
     writeUser_(u);
     return publicUser_(u);
@@ -352,7 +353,6 @@ function deleteUser_(id) {
     userSheet_().deleteRow(u.row);
     const props = PropertiesService.getScriptProperties();
     props.deleteProperty('RDONE_' + u.id);
-    props.deleteProperty('AUTH_' + u.email);
     return { ok: true, removed: removed };
   });
 }
@@ -490,42 +490,6 @@ function slip_(u, fileId) {
   if (!ok) return { error: 'not found' };
   const blob = file.getBlob();
   return { mime: blob.getContentType(), data: Utilities.base64Encode(blob.getBytes()) };
-}
-
-// ---------- PIN lockout (per account) ----------
-// Wrong PIN 5 times -> locked 15 min; each further lock doubles (max 24 h). A correct PIN resets it.
-const AUTH_MAX_FAILS = 5;
-const AUTH_BASE_LOCK_MS = 15 * 60 * 1000;
-const AUTH_MAX_LOCK_MS = 24 * 60 * 60 * 1000;
-
-function auth_(key, op) {
-  key = normEmail_(key).slice(0, 120) || '-';
-  return withLock_(function () {
-    const props = PropertiesService.getScriptProperties();
-    const name = 'AUTH_' + key;
-    let st = { fails: 0, level: 0, lockUntil: 0 };
-    try { st = Object.assign(st, JSON.parse(props.getProperty(name) || '{}')); } catch (err) {}
-    const now = Date.now();
-    const locked = st.lockUntil > now;
-    if (op === 'fail' && !locked) {
-      st.fails += 1;
-      if (st.fails >= AUTH_MAX_FAILS) {
-        st.level += 1;
-        st.lockUntil = now + Math.min(AUTH_BASE_LOCK_MS * Math.pow(2, st.level - 1), AUTH_MAX_LOCK_MS);
-        st.fails = 0;
-      }
-      props.setProperty(name, JSON.stringify(st));
-    } else if (op === 'ok') {
-      props.deleteProperty(name);
-      st = { fails: 0, level: 0, lockUntil: 0 };
-    }
-    const isLocked = st.lockUntil > now;
-    return {
-      locked: isLocked,
-      lockUntil: isLocked ? st.lockUntil : 0,
-      remaining: isLocked ? 0 : AUTH_MAX_FAILS - st.fails,
-    };
-  });
 }
 
 // ---------- settings (per user) ----------
@@ -670,8 +634,8 @@ function sendSummary_(u) {
     })() : '') +
     (budgetRows ? '<h3>งบประมาณเดือนนี้</h3><table width="100%">' + budgetRows + '</table>' : '') +
     (pdf
-      ? '<p style="color:#9a7d94;font-size:13px">📎 แนบ PDF สรุปรายการทั้งหมดมาด้วย — รหัสผ่านเปิดไฟล์คือ PIN ที่คุณใช้เข้าแอป</p>'
-      : '<p style="color:#9a7d94;font-size:13px">ดู/ดาวน์โหลด PDF ได้ที่แอป → ตั้งค่า → สรุป PDF</p>') +
+      ? '<p style="color:#9a7d94;font-size:13px">📎 แนบ PDF สรุปรายการทั้งหมดมาด้วย — รหัสผ่านเปิดไฟล์คือ "รหัสเปิด PDF" ที่คุณตั้งไว้ในแอป</p>'
+      : '<p style="color:#9a7d94;font-size:13px">ตั้ง "รหัสเปิด PDF" ที่แอป → ตั้งค่า → สรุป PDF แล้วอีเมลถัดไปจะแนบไฟล์ PDF มาด้วย</p>') +
     '<p style="color:#9a7d94;font-size:12px">ไม่อยากรับอีเมลนี้: ในแอป → ตั้งค่า → เอาติ๊ก "ส่งสรุปรายสัปดาห์" ออก</p>' +
     '</div>';
 

@@ -61,10 +61,10 @@ function AccountCards({ me, scanEnabled, onMe }: { me: Me | null; scanEnabled: b
   const [name, setName] = useState(me?.name || "");
   const [cur, setCur] = useState("");
   const [next, setNext] = useState("");
+  const [pdfPass, setPdfPass] = useState("");
   const [key, setKey] = useState("");
   const [busy, setBusy] = useState("");
   const [note, setNote] = useState<{ card: string; ok: boolean; text: string } | null>(null);
-  const digits = (v: string) => v.replace(/\D/g, "").slice(0, 8);
 
   async function patch(card: string, body: Record<string, string>, okText: string) {
     setBusy(card);
@@ -96,25 +96,39 @@ function AccountCards({ me, scanEnabled, onMe }: { me: Me | null; scanEnabled: b
           <button className="chip on" disabled={busy === "name" || !name.trim() || name.trim() === me?.name} onClick={() => patch("name", { name: name.trim() }, "เปลี่ยนชื่อแล้ว")}>บันทึก</button>
         </div>
         <Note card="name" />
-        <h4 style={{ margin: "14px 0 6px" }}>🔑 เปลี่ยน PIN</h4>
+        <h4 style={{ margin: "14px 0 6px" }}>🔑 เปลี่ยนรหัสผ่านเข้าใช้งาน</h4>
         <div className="date-row">
-          <input className="in num" type="password" inputMode="numeric" autoComplete="current-password" placeholder="PIN ปัจจุบัน" aria-label="PIN ปัจจุบัน" value={cur} onChange={(e) => setCur(digits(e.target.value))} />
-          <input className="in num" type="password" inputMode="numeric" autoComplete="new-password" placeholder="PIN ใหม่ 6–8 หลัก" aria-label="PIN ใหม่" value={next} onChange={(e) => setNext(digits(e.target.value))} />
+          <input className="in" type="password" autoComplete="current-password" placeholder="รหัสผ่านปัจจุบัน" aria-label="รหัสผ่านปัจจุบัน" value={cur} onChange={(e) => setCur(e.target.value)} />
+          <input className="in" type="password" autoComplete="new-password" placeholder="รหัสผ่านใหม่ 8+ ตัว" aria-label="รหัสผ่านใหม่" value={next} onChange={(e) => setNext(e.target.value)} />
         </div>
         <button
           className="btn ghost"
           style={{ marginTop: 10 }}
-          disabled={busy === "pin" || cur.length < 4 || next.length < 6}
+          disabled={busy === "pw" || !cur || next.length < 8}
           onClick={async () => {
-            if (await patch("pin", { currentPin: cur, newPin: next }, "เปลี่ยน PIN แล้ว — ครั้งหน้าใช้ PIN ใหม่ และไฟล์ PDF ใหม่จะใช้ PIN ใหม่เป็นรหัส")) {
+            if (await patch("pw", { currentPassword: cur, newPassword: next }, "เปลี่ยนรหัสผ่านแล้ว — ครั้งหน้าใช้รหัสผ่านใหม่")) {
               setCur("");
               setNext("");
             }
           }}
         >
-          เปลี่ยน PIN
+          เปลี่ยนรหัสผ่าน
         </button>
-        <Note card="pin" />
+        <Note card="pw" />
+        <h4 style={{ margin: "14px 0 6px" }}>📄 รหัสเปิดไฟล์ PDF</h4>
+        {me?.hasPdfPass ? (
+          <p className="ok">✓ ตั้งรหัสเปิด PDF ไว้แล้ว — ไฟล์ PDF และไฟล์แนบในอีเมลสรุปจะใช้รหัสนี้</p>
+        ) : (
+          <p className="hint">ยังไม่ได้ตั้ง — ตั้งก่อนเพื่อดาวน์โหลด PDF และรับ PDF แนบในอีเมลสรุปรายสัปดาห์ (รหัสนี้แยกจากรหัสผ่านเข้าใช้งาน)</p>
+        )}
+        <div className="add-row">
+          <input className="in" type="password" autoComplete="off" placeholder="รหัสเปิด PDF 6–32 ตัว" aria-label="รหัสเปิด PDF" value={pdfPass} maxLength={32} onChange={(e) => setPdfPass(e.target.value.trim())} />
+          <button className="chip on" disabled={busy === "pdf" || pdfPass.length < 6} onClick={async () => { if (await patch("pdf", { pdfPass }, "ตั้งรหัสเปิด PDF แล้ว")) setPdfPass(""); }}>บันทึก</button>
+        </div>
+        {me?.hasPdfPass && (
+          <button className="link-btn" disabled={busy === "pdf"} onClick={() => patch("pdf", { pdfPass: "" }, "ลบรหัสเปิด PDF แล้ว")}>ลบรหัสเปิด PDF</button>
+        )}
+        <Note card="pdf" />
         {me?.isAdmin && (
           <a className="btn" style={{ marginTop: 12, textAlign: "center" }} href="/admin">👑 จัดการผู้ใช้</a>
         )}
@@ -217,7 +231,7 @@ export default function SettingsView({ settings, scanEnabled, me, onMe, onSaved,
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60_000);
-      setMsg("สร้าง PDF แล้ว — รหัสผ่านเปิดไฟล์คือ PIN ของคุณ");
+      setMsg("สร้าง PDF แล้ว — รหัสผ่านเปิดไฟล์คือรหัสเปิด PDF ที่คุณตั้งไว้");
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -357,7 +371,7 @@ export default function SettingsView({ settings, scanEnabled, me, onMe, onSaved,
 
       <section className="panel glass">
         <h3>📄 สรุป PDF</h3>
-        <p className="hint">ไฟล์ PDF สีหวาน ๆ รวมรายการทั้งหมดในช่วงที่เลือก — เปิดไฟล์ด้วย PIN ที่คุณใช้เข้าแอป</p>
+        <p className="hint">ไฟล์ PDF สีหวาน ๆ รวมรายการทั้งหมดในช่วงที่เลือก — เปิดไฟล์ด้วย “รหัสเปิด PDF” ที่ตั้งไว้ในการ์ดบัญชีของฉัน</p>
         <div className="chips">
           <button className="chip" onClick={() => preset("7d")}>7 วันล่าสุด</button>
           <button className="chip" onClick={() => preset("month")}>เดือนนี้</button>
@@ -367,14 +381,14 @@ export default function SettingsView({ settings, scanEnabled, me, onMe, onSaved,
           <input className="in" type="date" aria-label="ตั้งแต่วันที่" value={pFrom} max={pTo || undefined} onChange={(e) => setPFrom(e.target.value)} />
           <input className="in" type="date" aria-label="ถึงวันที่" value={pTo} min={pFrom || undefined} onChange={(e) => setPTo(e.target.value)} />
         </div>
-        <button className="btn" style={{ marginTop: 12 }} disabled={pdfBusy} onClick={downloadPdf}>{pdfBusy ? "กำลังสร้าง PDF…" : "ดาวน์โหลด PDF"}</button>
+        <button className="btn" style={{ marginTop: 12 }} disabled={pdfBusy || !me?.hasPdfPass} onClick={downloadPdf}>{pdfBusy ? "กำลังสร้าง PDF…" : "ดาวน์โหลด PDF"}</button>
       </section>
 
       <section className="panel glass">
         <h3>💌 สรุปทางอีเมล</h3>
         <label className="switch">
           <input type="checkbox" checked={s.weeklyEmail} onChange={(e) => set("weeklyEmail", e.target.checked)} />
-          <span>ส่งสรุปรายสัปดาห์ทุกวันอาทิตย์ 19:00 ไปที่อีเมลของคุณ พร้อมแนบ PDF (รหัสผ่าน = PIN ของคุณ)</span>
+          <span>ส่งสรุปรายสัปดาห์ทุกวันอาทิตย์ 19:00 ไปที่อีเมลของคุณ พร้อมแนบ PDF (ถ้าตั้ง “รหัสเปิด PDF” ไว้ — ใช้รหัสนั้นเปิดไฟล์)</span>
         </label>
         <button className="btn ghost" disabled={busy} onClick={testEmail}>ส่งสรุปให้ดูตอนนี้</button>
       </section>
