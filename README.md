@@ -52,14 +52,30 @@
 
 ### ขั้นที่ 2 สร้างโปรเจกต์ Supabase (ระบบสมัคร/เข้าสู่ระบบ)
 Supabase เก็บแค่ **บัญชีเข้าสู่ระบบ** (อีเมล + รหัสผ่าน) ส่วนรายการและสลิปยังอยู่ใน Google Sheet/Drive ของคุณ
-1. สมัคร https://supabase.com → **New project** (แผนฟรีใช้ได้) แล้วรอให้สร้างเสร็จ
-2. **Project Settings → API Keys** คัดลอก **Project URL** และ **anon / publishable key**
-3. **Authentication → Sign In / Providers → Email:** เปิด **Confirm email**, และให้ “Allow new users to sign up” เปิดอยู่
-4. **Authentication → URL Configuration:** ตั้ง **Site URL** = ที่อยู่แอปของคุณ (เช่น `https://paotang-xxxx.vercel.app`) และเพิ่มที่อยู่เดียวกันใน Redirect URLs
-5. **Authentication → Email Templates** แก้ลิงก์ในเทมเพลตให้เป็นแบบนี้ (ปุ่ม/ลิงก์เท่านั้น ที่เหลือแก้ข้อความได้ตามใจ)
-   - **Confirm signup:** `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup`
-   - **Reset password:** `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset`
-6. **ตั้ง SMTP ของคุณเอง** (Authentication → SMTP Settings เช่น Resend, Brevo) — ตัวส่งอีเมลเริ่มต้นของ Supabase จำกัดจำนวนฉบับมาก ใช้ทดสอบได้ แต่ไม่พอสำหรับผู้ใช้จริง
+
+**2.1 สร้างโปรเจกต์** — https://supabase.com → **New project** (แผนฟรีใช้ได้) ตั้งชื่อและรหัสผ่านฐานข้อมูล (เก็บไว้ แต่แอปนี้ไม่ได้ใช้) ส่วน Security: ติ๊ก *Enable Data API* ไว้, **เอาติ๊ก *Automatically expose new tables* ออก**, ติ๊ก *Enable automatic RLS* แล้วกด Create
+
+**2.2 คัดลอกคีย์ 2 ค่า** — กดปุ่ม **Connect** ด้านบน (หรือ **Project Settings → API Keys**)
+- **Project URL** เช่น `https://xxxx.supabase.co` → ใช้เป็น `SUPABASE_URL`
+- **Publishable key** (ขึ้นต้น `sb_publishable_…`) หรือ **anon key** (ขึ้นต้น `eyJ…`) → ใช้เป็น `SUPABASE_ANON_KEY`
+- ห้ามใช้ `secret` / `service_role` key ในช่องนี้
+
+**2.3 ตั้งค่าการสมัคร** — เมนู **Authentication**
+1. **Sign In / Providers → Email:** เปิด *Enable Email provider*, เปิด **Confirm email**, ตั้งความยาวรหัสผ่านขั้นต่ำ 8 (แอปบังคับ 8 อยู่แล้ว) และให้ *Allow new users to sign up* เปิดอยู่
+2. **URL Configuration:** ใส่ **Site URL** = ที่อยู่แอปของคุณ เช่น `https://paotang-xxxx.vercel.app` (ไม่มี `/` ปิดท้าย) และเพิ่มที่อยู่เดียวกันใน **Redirect URLs** — ถ้ายังไม่ได้ติดตั้ง Vercel ให้ทำขั้นที่ 3 ก่อนแล้วกลับมาใส่ข้อนี้
+3. **Email Templates:** แก้ 2 แบบ โดยเปลี่ยนปุ่ม/ลิงก์ในเนื้อหาเป็นดังนี้ (ข้อความอื่นแก้เป็นภาษาไทยได้ตามใจ)
+
+   **Confirm signup** — ลิงก์:
+   ```html
+   <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=signup">ยืนยันอีเมล</a>
+   ```
+   **Reset password** — ลิงก์:
+   ```html
+   <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery&next=/reset">ตั้งรหัสผ่านใหม่</a>
+   ```
+   ต้องใช้ลิงก์นี้เท่านั้น (ห้ามใช้ `{{ .ConfirmationURL }}` ที่เป็นค่าเริ่มต้น) ไม่เช่นนั้นกดลิงก์ในอีเมลแล้วเข้าสู่ระบบไม่ได้
+
+**2.4 ตั้ง SMTP ของคุณเอง** — **Authentication → Emails → SMTP Settings** (ชื่อเมนูอาจต่างเล็กน้อย) ตัวส่งอีเมลเริ่มต้นของ Supabase จำกัดไม่กี่ฉบับต่อชั่วโมง ใช้ทดสอบได้ แต่ไม่พอสำหรับผู้ใช้จริง ตัวอย่างฟรี: [Resend](https://resend.com) (ต้องยืนยันโดเมนของคุณ) หรือ [Brevo](https://www.brevo.com) — เอาค่า host / port / username / password ที่ผู้ให้บริการให้มากรอก
 
 > โปรเจกต์ฟรีของ Supabase จะถูกพักเมื่อไม่มีการใช้งาน ~1 สัปดาห์ (กด Restore ได้) ถ้าใช้จริงจังควรพิจารณาแผนเสียเงิน
 
@@ -73,7 +89,9 @@ Supabase เก็บแค่ **บัญชีเข้าสู่ระบ�
 | `SUPABASE_URL` | Project URL จากขั้นที่ 2 |
 | `SUPABASE_ANON_KEY` | anon / publishable key จากขั้นที่ 2 |
 
-กด **Deploy** รอ 1–2 นาที จะได้ที่อยู่แอป เช่น `https://paotang-xxxx.vercel.app` (เอาไปใส่เป็น Site URL ใน Supabase ข้อ 4 ด้วย)
+กด **Deploy** รอ 1–2 นาที จะได้ที่อยู่แอป เช่น `https://paotang-xxxx.vercel.app` → เอาไปใส่เป็น **Site URL** และ **Redirect URLs** ใน Supabase (ขั้นที่ 2.3 ข้อ 2) ด้วย
+
+**ติดตั้งไว้แล้ว / แก้ค่าทีหลัง:** Vercel → โปรเจกต์ → **Settings → Environment Variables** ใส่หรือแก้ค่า (เลือกครบทั้ง Production / Preview / Development) แล้วไปที่ **Deployments → ⋯ → Redeploy** ค่าจึงจะมีผล
 
 <details>
 <summary>ปุ่มใช้ไม่ได้? ติดตั้งแบบทำเอง</summary>
@@ -84,7 +102,7 @@ Supabase เก็บแค่ **บัญชีเข้าสู่ระบ�
 </details>
 
 ### ขั้นที่ 4 สมัครบัญชีผู้ดูแล
-1. เปิด `https://<ที่อยู่แอป>/setup` ถ้าขึ้น ✅ ครบทุกข้อแปลว่าเชื่อมต่อสำเร็จ
+1. เปิด `https://<ที่อยู่แอป>/setup` ถ้าขึ้น ✅ ครบทุกข้อแปลว่าเชื่อมต่อสำเร็จ (ถ้า ❌ ที่ Supabase ให้ตรวจ URL / key ใน Vercel และ Redeploy; ถ้า Apps Script ยังไม่ใช่ v6 ให้วางโค้ดใหม่ตามหัวข้อ “อัปเดตเป็นเวอร์ชันใหม่”)
 2. เปิด `https://<ที่อยู่แอป>/signup` สมัครด้วยอีเมลของคุณ → กดลิงก์ยืนยันในอีเมล — **บัญชีแรกที่สมัครจะเป็นผู้ดูแลอัตโนมัติ** (จึงควรสมัครเองก่อนแจกลิงก์ให้ใคร)
 3. เข้าสู่ระบบ → ตั้งค่า → **👑 จัดการผู้ใช้**
 
