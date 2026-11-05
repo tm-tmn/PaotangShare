@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { sessionUid } from "@/lib/auth";
+import { requireUid } from "@/lib/session";
 import { openPin } from "@/lib/pinbox";
 import { bootstrap, getUser } from "@/lib/store";
 import { buildReport } from "@/lib/report";
@@ -29,15 +29,15 @@ export async function GET(req: Request) {
       if (!expected || !sameSecret(secret, expected)) return err("unauthorized", 401);
       uid = url.searchParams.get("uid");
     } else {
-      uid = await sessionUid(req);
+      uid = await requireUid(req).catch(() => null);
     }
     if (!uid) return err("unauthorized", 401);
 
     const user = await getUser(uid);
     if (!user || user.status !== "active") return err("unauthorized", 401);
-    // each user's PDF is locked with their own PIN
-    const pin = openPin(user.pinEnc);
-    if (!pin) return err("อ่าน PIN ของบัญชีไม่ได้ จึงเข้ารหัส PDF ไม่ได้ — ให้ผู้ดูแลรีเซ็ต PIN", 500);
+    // each user's PDF is locked with the PDF password they chose in Settings
+    const pass = openPin(user.pinEnc);
+    if (!pass) return err("ตั้ง “รหัสเปิด PDF” ในหน้าตั้งค่าก่อน แล้วค่อยสร้างไฟล์ PDF", 400);
 
     const from = url.searchParams.get("from") || "";
     const to = url.searchParams.get("to") || "";
@@ -45,7 +45,7 @@ export async function GET(req: Request) {
     if (Date.parse(to) - Date.parse(from) > 366 * 86400000) return err("เลือกช่วงได้ไม่เกิน 1 ปี", 400);
 
     const { items, settings } = await bootstrap(uid);
-    const pdf = await buildReport({ items, settings, from, to, password: pin });
+    const pdf = await buildReport({ items, settings, from, to, password: pass });
     return new NextResponse(new Uint8Array(pdf), {
       headers: {
         "Content-Type": "application/pdf",
