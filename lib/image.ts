@@ -54,18 +54,28 @@ function scan(src: ImageBitmap | HTMLImageElement): string | null {
 }
 
 export interface Prepared {
-  blob: Blob;
+  blob: Blob; // kept with the entry (1600 px)
+  aiBlob: Blob; // smaller copy sent to the AI (faster upload, plenty for reading text)
   previewUrl: string;
-  qr: QrInfo | null;
+  /** decode the QR code (CPU-heavy, so it is run after the AI request has been started) */
+  readQr: () => QrInfo | null;
 }
 
-/** Read the slip QR and shrink the photo to a JPEG that fits comfortably under upload limits. */
+const toJpeg = (c: HTMLCanvasElement, q: number): Promise<Blob> =>
+  new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("แปลงรูปไม่สำเร็จ"))), "image/jpeg", q));
+
+/** Shrink the photo to JPEGs that fit comfortably under upload limits; QR decoding is deferred to readQr(). */
 export async function prepareSlip(file: Blob): Promise<Prepared> {
   const src = await loadBitmap(file);
-  const raw = scan(src);
-  const { c } = draw(src, 1600);
-  const blob: Blob = await new Promise((res, rej) =>
-    c.toBlob((b) => (b ? res(b) : rej(new Error("แปลงรูปไม่สำเร็จ"))), "image/jpeg", 0.85),
-  );
-  return { blob, previewUrl: URL.createObjectURL(blob), qr: raw ? parseQr(raw) : null };
+  const blob = await toJpeg(draw(src, 1600).c, 0.85);
+  const aiBlob = await toJpeg(draw(src, 1280).c, 0.8);
+  return {
+    blob,
+    aiBlob,
+    previewUrl: URL.createObjectURL(blob),
+    readQr: () => {
+      const raw = scan(src);
+      return raw ? parseQr(raw) : null;
+    },
+  };
 }

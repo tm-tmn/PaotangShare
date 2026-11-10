@@ -32,7 +32,7 @@ interface BIPEvent extends Event { prompt: () => Promise<void> }
 const CACHE_KEY = "pt-cache-v1";
 const sortTx = (a: Tx, b: Tx) => (b.date + b.createdAt).localeCompare(a.date + a.createdAt);
 
-function readCache(): { items: Tx[]; settings: Settings } | null {
+function readCache(): { items: Tx[]; settings: Settings; scan?: boolean } | null {
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     return raw ? JSON.parse(raw) : null;
@@ -40,9 +40,10 @@ function readCache(): { items: Tx[]; settings: Settings } | null {
     return null;
   }
 }
-function writeCache(items: Tx[], settings: Settings) {
+function writeCache(items: Tx[], settings: Settings, scan: boolean | null) {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ items, settings }));
+    // rows still being saved are not cached: they would reappear as ghosts after a reload
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ items: items.filter((t) => !t.pending), settings, scan: scan ?? undefined }));
   } catch {
     /* storage full or blocked — fine */
   }
@@ -51,7 +52,7 @@ function writeCache(items: Tx[], settings: Settings) {
 export default function Home() {
   const [items, setItems] = useState<Tx[] | null>(null);
   const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
-  const [scanEnabled, setScanEnabled] = useState(false);
+  const [scanEnabled, setScanEnabled] = useState<boolean | null>(null); // null until the server has said
   const [me, setMe] = useState<Me | null>(null);
   const [error, setError] = useState("");
   const [syncing, setSyncing] = useState(false);
@@ -78,11 +79,14 @@ export default function Home() {
       if (res.status === 401) return location.replace("/login");
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setItems(data.items);
+      // keep rows that are still being saved (or failed) — the server doesn't know them yet
+      setItems((cur) => {
+        const pend = (cur || []).filter((t) => t.pending);
+        return pend.length ? [...(data.items as Tx[]).filter((t) => !pend.some((p) => p.id === t.id)), ...pend].sort(sortTx) : data.items;
+      });
       setSettings(data.settings);
       setScanEnabled(!!data.scanEnabled);
       setMe({ ...data.user, isAdmin: !!data.isAdmin, sharedAiKey: !!data.sharedAiKey });
-      writeCache(data.items, data.settings);
       setError("");
     } catch (e) {
       setError((e as Error).message);
@@ -98,6 +102,7 @@ export default function Home() {
     if (cached) {
       setItems(cached.items);
       setSettings({ ...DEFAULT_SETTINGS, ...cached.settings });
+      if (typeof cached.scan === "boolean") setScanEnabled(cached.scan);
     }
     load();
     if (new URLSearchParams(location.search).get("shared")) {
@@ -127,8 +132,70 @@ export default function Home() {
 
   // keep the offline cache in step with local edits
   useEffect(() => {
-    if (items) writeCache(items, settings);
-  }, [items, settings]);
+    if (items) writeCache(items, settings, scanEnabled);
+  }, [items, settings, scanEnabled]);
+
+  // ---- saving a new entry in the background (the sheet closes at once; Sheet + Drive writes take seconds) ----
+  const jobs = useRef(new Map<string, { fd: FormData; tx: Tx }>());
+  const patchTx = (id: string, f: (t: Tx) => Tx | null) =>
+    setItems((cur) => (cur || []).flatMap((t) => (t.id === id ? (f(t) ? [f(t) as Tx] : []) : [t])).sort(sortTx));
+
+  async function sendJob(job: { fd: FormData; tx: Tx }) {
+    const id = job.tx.id;
+    jobs.current.set(id, job);
+    patchTx(id, (t) => ({ ...t, pending: "saving", err: undefined }));
+    try {
+      const res = await fetch("/api/transactions", { method: "POST", body: job.fd });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) return location.replace("/login");
+      if (res.status === 409 || data.duplicate) {
+        // the same slip was saved before: drop the optimistic row
+        jobs.current.delete(id);
+        patchTx(id, () => null);
+        return flash(data.error || "สลิปนี้บันทึกไปแล้ว");
+      }
+      if (!res.ok) throw new Error(data.error || "บันทึกไม่สำเร็จ");
+      jobs.current.delete(id);
+      patchTx(id, () => data.item as Tx);
+      setParty(Date.now());
+      flash("บันทึกแล้ว 💖");
+    } catch (e) {
+      const m = (e as Error).message;
+      patchTx(id, (t) => ({ ...t, pending: "failed", err: m }));
+      flash("บันทึกไม่สำเร็จ — แตะรายการที่มี ⚠️ เพื่อลองใหม่");
+    }
+  }
+
+  function submitNew(job: { fd: FormData; tx: Tx }) {
+    setItems((cur) => [{ ...job.tx, pending: "saving" as const }, ...(cur || [])].sort(sortTx));
+    if ((sheet?.kind === "add" ? sheet.queue.length : 0) <= 1 && !job.tx.date.startsWith(month)) setMonth(job.tx.date.slice(0, 7));
+    nextInQueue();
+    void sendJob(job);
+  }
+
+  function openTx(tx: Tx) {
+    if (tx.pending === "saving") return flash("กำลังบันทึกอยู่ รอสักครู่นะคะ…");
+    if (tx.pending === "failed") {
+      const job = jobs.current.get(tx.id);
+      if (!job) return patchTx(tx.id, () => null);
+      if (confirm(`บันทึกไม่สำเร็จ: ${tx.err || ""}\n\nกด “ตกลง” เพื่อลองบันทึกอีกครั้ง หรือ “ยกเลิก” เพื่อทิ้งรายการนี้`)) void sendJob(job);
+      else {
+        jobs.current.delete(tx.id);
+        patchTx(tx.id, () => null);
+      }
+      return;
+    }
+    setSheet({ kind: "detail", tx });
+  }
+
+  // warn before closing the tab while something is still being saved
+  useEffect(() => {
+    const warn = (e: BeforeUnloadEvent) => {
+      if ((items || []).some((t) => t.pending)) { e.preventDefault(); e.returnValue = ""; }
+    };
+    addEventListener("beforeunload", warn);
+    return () => removeEventListener("beforeunload", warn);
+  }, [items]);
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(""), 2200); };
 
@@ -285,7 +352,7 @@ export default function Home() {
             allItems={all}
             settings={settings}
             day={day}
-            onOpen={(tx) => setSheet({ kind: "detail", tx })}
+            onOpen={openTx}
             onAdd={() => setSheet({ kind: "add", queue: [], index: 0 })}
           />
         ) : tab === "stats" ? (
@@ -293,7 +360,7 @@ export default function Home() {
         ) : (
           <SettingsView
             settings={settings}
-            scanEnabled={scanEnabled}
+            scanEnabled={scanEnabled === true}
             me={me}
             onMe={(u) => { setMe((cur) => (cur ? { ...cur, ...u } : cur)); setScanEnabled(u.hasGeminiKey || !!me?.sharedAiKey); }}
             onSaved={(s) => { setSettings(s); flash("บันทึกการตั้งค่าแล้ว 💖"); }}
@@ -345,13 +412,8 @@ export default function Home() {
           findByRef={(r) => refIndex.get(r)}
           onClose={() => setSheet(null)}
           onSkip={nextInQueue}
-          onSaved={(tx) => {
-            setItems((cur) => [tx, ...(cur || [])].sort(sortTx));
-            if (sheet.queue.length <= 1 && !tx.date.startsWith(month)) setMonth(tx.date.slice(0, 7));
-            setParty(Date.now());
-            flash(sheet.index + 1 < sheet.queue.length ? `บันทึกแล้ว 💖 (${sheet.index + 1}/${sheet.queue.length})` : "บันทึกแล้ว 💖");
-            nextInQueue();
-          }}
+          onSubmitNew={submitNew}
+          onSaved={() => {}}
         />
       )}
       {sheet?.kind === "edit" && (

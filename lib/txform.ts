@@ -36,5 +36,8 @@ export async function parseTxForm(req: Request) {
       bytes: await file.arrayBuffer(),
     };
   }
-  return { fields, slip };
+  // the client may pick the id (so an optimistic row can be matched with the saved one)
+  const given = String(form.get("id") || "");
+  const id = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(given) ? given.toLowerCase() : "";
+  return { fields, slip, id };
 }

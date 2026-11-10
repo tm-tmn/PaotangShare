@@ -587,3 +587,7 @@ small.ok { color: var(--muted); }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .celebrate { display: none; }
 }
+
+.row.pending { opacity: .6; }
+.row.pending .when { color: var(--muted); }
+.row .when.warn { color: var(--danger, #c0392b); font-weight: 600; opacity: 1; }

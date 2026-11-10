@@ -50,35 +50,43 @@ export async function POST(req: Request) {
     const data = Buffer.from(await file.arrayBuffer()).toString("base64");
 
     const urlFor = (m: string) => `${process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com"}/v1beta/models/${encodeURIComponent(m)}:generateContent`;
-    const init: RequestInit = {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": key },
-        body: JSON.stringify({
-          contents: [
-            {
-              role: "user",
-              parts: [
-                { inline_data: { mime_type: file.type || "image/jpeg", data } },
-                {
-                  text:
-                    "Read this Thai bank transfer slip and extract the fields. " +
-                    "Thai months: ม.ค.=01 ก.พ.=02 มี.ค.=03 เม.ย.=04 พ.ค.=05 มิ.ย.=06 ก.ค.=07 ส.ค.=08 ก.ย.=09 ต.ค.=10 พ.ย.=11 ธ.ค.=12. " +
-                    "A 2-digit year like 69 means Buddhist 2569 = 2026. Leave fields empty if unreadable; never guess the amount. " +
-                    `Categories to choose from: ${categories}`,
-                },
-              ],
-            },
-          ],
-          generationConfig: { responseMimeType: "application/json", responseSchema: SCHEMA, temperature: 0 },
-        }),
-    };
+    const prompt =
+      "Read this image — a Thai bank transfer / payment slip, or a shop receipt / invoice — and extract the fields. " +
+      "For a shop receipt: amount = the final total actually paid (รวมสุทธิ / ยอดชำระ, after discount and VAT), toName = the shop name, date = the receipt date. " +
+      "Thai months: ม.ค.=01 ก.พ.=02 มี.ค.=03 เม.ย.=04 พ.ค.=05 มิ.ย.=06 ก.ค.=07 ส.ค.=08 ก.ย.=09 ต.ค.=10 พ.ย.=11 ธ.ค.=12. " +
+      "A 2-digit year like 69 means Buddhist 2569 = 2026. Leave fields empty if unreadable; never guess the amount. " +
+      `Categories to choose from: ${categories}`;
+    // Reading a slip needs no reasoning: ask for the lowest "thinking" level (much faster). Some models reject the
+    // field, so on a 400 that mentions it we retry the same model without it.
+    const initFor = (thinking: boolean): RequestInit => ({
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": key },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ inline_data: { mime_type: file.type || "image/jpeg", data } }, { text: prompt }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: SCHEMA,
+          temperature: 0,
+          maxOutputTokens: 1024,
+          ...(thinking ? { thinkingConfig: { thinkingLevel: "minimal" } } : {}),
+        },
+      }),
+    });
     // busy (503/429), server hiccup (500) or unknown/blocked model (404/403) -> move on to the next model
     const retryable = (c: number) => [429, 500, 503, 404, 403].includes(c);
+    const deadline = Date.now() + 45_000; // stay under maxDuration
+    const ask = async (m: string, thinking: boolean) =>
+      fetch(urlFor(m), { ...initFor(thinking), signal: AbortSignal.timeout(Math.max(3000, Math.min(15000, deadline - Date.now()))) });
     let res: Response | undefined;
-    for (let pass = 0; pass < 2; pass++) {
+    for (let pass = 0; pass < 2 && Date.now() < deadline; pass++) {
       for (const m of models) {
+        if (Date.now() >= deadline) break;
         try {
-          res = await fetch(urlFor(m), { ...init, signal: AbortSignal.timeout(15000) });
+          res = await ask(m, true);
+          if (res.status === 400) {
+            const msg = JSON.stringify(await res.clone().json().catch(() => ({})));
+            if (/thinking/i.test(msg)) res = await ask(m, false);
+          }
         } catch {
           res = undefined;
           continue;
@@ -86,7 +94,7 @@ export async function POST(req: Request) {
         if (res.ok || !retryable(res.status)) break;
       }
       if (res && (res.ok || !retryable(res.status))) break;
-      if (pass === 0) await new Promise((r) => setTimeout(r, 1500));
+      if (pass === 0) await new Promise((r) => setTimeout(r, 800));
     }
     const body = res ? await res.json().catch(() => ({})) : {};
     if (!res || !res.ok) {

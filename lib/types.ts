@@ -12,6 +12,9 @@ export interface Tx {
   transRef: string;
   slipFileId: string;
   account: string;
+  /** client-only: saving in the background / failed to save (never stored) */
+  pending?: "saving" | "failed";
+  err?: string;
 }
 
 export interface Recurring {

@@ -130,7 +130,7 @@ Supabase เก็บแค่ **บัญชีเข้าสู่ระบ�
 
 ## อัปเดตเป็นเวอร์ชันใหม่
 - **แอป:** ที่รีโปของคุณใน GitHub กด **Sync fork** Vercel จะติดตั้งให้อัตโนมัติ
-- **Apps Script:** วาง `Code.gs` (v6) ใหม่ทับ → บันทึก → Run `setup` อีกครั้ง (รหัสลับเดิมยังอยู่) → Deploy → **Manage deployments** → ✏️ → Version: **New version** → Deploy (URL เดิมใช้ต่อได้)
+- **Apps Script:** วาง `Code.gs` (v7) ใหม่ทับ → บันทึก → Run `setup` อีกครั้ง (รหัสลับเดิมยังอยู่) → Deploy → **Manage deployments** → ✏️ → Version: **New version** → Deploy (URL เดิมใช้ต่อได้)
 
 ---
 

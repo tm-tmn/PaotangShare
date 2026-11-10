@@ -22,7 +22,7 @@ export function TxRow({ t, i, onOpen, showDate }: { t: Tx; i: number; onOpen: (t
   const title = (recurring ? t.note.replace(/\s*\(ประจำ\)$/, "") : t.note) || t.category || (t.type === "income" ? "รายรับ" : "รายจ่าย");
   const time = timeOf(t.createdAt);
   return (
-    <button className="row" onClick={() => onOpen(t)} style={{ "--i": Math.min(i, 12) } as React.CSSProperties}>
+    <button className={`row ${t.pending ? "pending" : ""}`} onClick={() => onOpen(t)} style={{ "--i": Math.min(i, 12) } as React.CSSProperties}>
       <span className="dot" style={{ background: tintFor(t.category, t.type) }}>{iconFor(t.category, t.type)}</span>
       <span className="mid">
         <b>{title}</b>
@@ -34,7 +34,9 @@ export function TxRow({ t, i, onOpen, showDate }: { t: Tx; i: number; onOpen: (t
       </span>
       <span className="right">
         <span className={`amt num ${t.type}`}>{t.type === "income" ? "+" : "−"}{baht(t.amount)}</span>
-        <small className="when">{showDate ? dayLabel(t.date) : recurring ? "ประจำเดือน" : time}</small>
+        <small className={`when ${t.pending === "failed" ? "warn" : ""}`}>
+          {t.pending === "saving" ? "กำลังบันทึก…" : t.pending === "failed" ? "⚠️ ไม่สำเร็จ · แตะเพื่อลองใหม่" : showDate ? dayLabel(t.date) : recurring ? "ประจำเดือน" : time}
+        </small>
       </span>
     </button>
   );

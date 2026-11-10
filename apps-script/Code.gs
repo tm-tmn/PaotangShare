@@ -26,7 +26,7 @@
 
 // รหัสลับเก็บใน Script Properties (สร้างให้อัตโนมัติตอน Run setup) — ไม่ต้องแก้บรรทัดนี้
 const SECRET_OVERRIDE = '';
-const VERSION = 6;
+const VERSION = 7;
 
 const TX_TAB = 'รายการ';
 const USER_TAB = 'ผู้ใช้';
@@ -423,6 +423,9 @@ function list_(uid) {
 
 function add_(u, tx, slip) {
   return withLock_(function () {
+    // same id sent twice (a retry after a timeout) -> return the row that is already there
+    const same = txRows_().filter(function (r) { return r[0] === tx.id && r[UID_COL] === u.id; })[0];
+    if (same) return { item: rowToTx_(same) };
     if (tx.transRef) {
       const dup = txRows_().filter(function (r) { return r[UID_COL] === u.id && r[8] === tx.transRef; })[0];
       if (dup) {

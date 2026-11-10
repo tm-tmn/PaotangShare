@@ -9,10 +9,10 @@ export const maxDuration = 30;
 export async function POST(req: Request) {
   try {
     const uid = await requireUid(req);
-    const { fields, slip } = await parseTxForm(req);
+    const { fields, slip, id } = await parseTxForm(req);
     const item = await addTx(
       uid,
-      { id: crypto.randomUUID(), createdAt: new Date().toISOString(), slipFileId: "", ...fields },
+      { id: id || crypto.randomUUID(), createdAt: new Date().toISOString(), slipFileId: "", ...fields },
       slip,
     );
     return NextResponse.json({ item });

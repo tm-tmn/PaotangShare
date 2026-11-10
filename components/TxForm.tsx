@@ -2,13 +2,14 @@
 import { Camera, Sparkles, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { prepareSlip, type Prepared } from "@/lib/image";
+import type { QrInfo } from "@/lib/slipqr";
 import { baht, cleanAmount, dayLabel, fullDate, todayISO } from "@/lib/format";
 import { iconFor } from "@/lib/icons";
 import type { ScanResult, Settings, Tx, TxType } from "@/lib/types";
 
 interface Props {
   settings: Settings;
-  scanEnabled: boolean;
+  scanEnabled: boolean | null; // null = not known yet (still loading) — try the AI anyway
   editing?: Tx;
   file?: Blob | null;
   defaultDate?: string;
@@ -17,6 +18,8 @@ interface Props {
   onClose: () => void;
   onSkip?: () => void;
   onSaved: (tx: Tx, wasEdit: boolean) => void;
+  /** new entries are saved in the background: the form closes at once and the page does the upload */
+  onSubmitNew?: (job: { fd: FormData; tx: Tx }) => void;
 }
 
 function matchAccount(accounts: string[], bank?: string) {
@@ -31,7 +34,7 @@ const yesterdayISO = () => {
   return todayISO(d);
 };
 
-export default function TxForm({ settings, scanEnabled, editing, file, defaultDate, queue, findByRef, onClose, onSkip, onSaved }: Props) {
+export default function TxForm({ settings, scanEnabled, editing, file, defaultDate, queue, findByRef, onClose, onSkip, onSaved, onSubmitNew }: Props) {
   const [type, setType] = useState<TxType>(editing?.type || "expense");
   const [amount, setAmount] = useState(editing ? String(editing.amount) : "");
   const [category, setCategory] = useState(editing?.category || "");
@@ -41,6 +44,7 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
   const [bank, setBank] = useState(editing?.bank || "");
   const [transRef, setTransRef] = useState(editing?.transRef || "");
   const [slip, setSlip] = useState<Prepared | null>(null);
+  const [qr, setQr] = useState<QrInfo | null>(null);
   const [reading, setReading] = useState("");
   const [scan, setScan] = useState<ScanResult | null>(null);
   const [scanErr, setScanErr] = useState("");
@@ -53,10 +57,24 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
   const touch = (k: string) => touched.current.add(k);
   const typeRef = useRef(type);
   typeRef.current = type;
+  const scanRef = useRef(scanEnabled);
+  scanRef.current = scanEnabled;
 
   function checkDup(ref: string) {
     const hit = ref ? findByRef(ref) : undefined;
     setDup(hit && hit.id !== editing?.id ? hit : null);
+  }
+
+  async function runAi(p: Prepared): Promise<ScanResult | null> {
+    const fd = new FormData();
+    fd.set("image", p.aiBlob, "slip.jpg");
+    fd.set("categories", [...settings.expenseCategories, ...settings.incomeCategories].join(", "));
+    const res = await fetch("/api/scan", { method: "POST", body: fd });
+    const data = await res.json().catch(() => ({}));
+    // "no AI key" is only worth showing once we know AI is meant to be on
+    if (res.status === 501 && scanRef.current !== true) return null;
+    if (!res.ok) throw new Error(data.error || `AI error ${res.status}`);
+    return data.result as ScanResult;
   }
 
   async function handleFile(f: Blob) {
@@ -64,7 +82,8 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
     setScan(null);
     setScanErr("");
     setDup(null);
-    setReading("น้องหมูกำลังอ่าน QR…");
+    setQr(null);
+    setReading("น้องหมูกำลังเตรียมรูป…");
     let p: Prepared;
     try {
       p = await prepareSlip(f);
@@ -74,7 +93,14 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
       return;
     }
     setSlip(p);
-    const qr = p.qr;
+
+    // start the AI request first, then decode the QR while it is in flight
+    const ai = scanRef.current !== false ? runAi(p) : null;
+    ai?.catch(() => {}); // handled below
+    setReading(ai ? "AI กำลังอ่านยอดเงินจากสลิป…" : "น้องหมูกำลังอ่าน QR…");
+    await new Promise((r) => setTimeout(r, 30)); // let the "reading" state paint before the CPU-heavy decode
+    const qr = p.readQr();
+    setQr(qr);
     if (qr?.kind === "slip") {
       if (qr.transRef) {
         setTransRef(qr.transRef);
@@ -94,38 +120,33 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
       if (qr.payee && !touched.current.has("note")) setNote(qr.payee);
     }
 
-    if (scanEnabled) {
-      setReading("AI กำลังอ่านยอดเงินจากสลิป…");
+    if (ai) {
       try {
-        const fd = new FormData();
-        fd.set("image", p.blob, "slip.jpg");
-        fd.set("categories", [...settings.expenseCategories, ...settings.incomeCategories].join(", "));
-        const res = await fetch("/api/scan", { method: "POST", body: fd });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error);
-        const r: ScanResult = data.result;
-        setScan(r);
-        if (r.isSlip !== false) {
-          const t = touched.current;
-          if (r.amount && !t.has("amount")) setAmount(String(r.amount));
-          if (r.date && !t.has("date")) setDate(r.date);
-          if (!t.has("note")) {
-            const who = typeRef.current === "income" ? r.fromName : r.toName;
-            const n = [r.memo, who].filter(Boolean).join(" · ");
-            if (n) setNote(n);
-          }
-          if (!t.has("category") && r.suggestedCategory) {
-            const list = typeRef.current === "income" ? settings.incomeCategories : settings.expenseCategories;
-            if (list.includes(r.suggestedCategory)) setCategory(r.suggestedCategory);
-          }
-          if (r.transRef && qr?.kind !== "slip") {
-            setTransRef(r.transRef);
-            checkDup(r.transRef);
-          }
-          if (r.fromBank && qr?.kind !== "slip") setBank(r.fromBank);
-          if (!t.has("account")) {
-            const acc = matchAccount(settings.accounts, r.fromBank || qr?.bank);
-            if (acc) setAccount(acc);
+        const r = await ai;
+        if (r) {
+          setScan(r);
+          if (r.isSlip !== false) {
+            const t = touched.current;
+            if (r.amount && !t.has("amount")) setAmount(String(r.amount));
+            if (r.date && !t.has("date")) setDate(r.date);
+            if (!t.has("note")) {
+              const who = typeRef.current === "income" ? r.fromName : r.toName;
+              const n = [r.memo, who].filter(Boolean).join(" · ");
+              if (n) setNote(n);
+            }
+            if (!t.has("category") && r.suggestedCategory) {
+              const list = typeRef.current === "income" ? settings.incomeCategories : settings.expenseCategories;
+              if (list.includes(r.suggestedCategory)) setCategory(r.suggestedCategory);
+            }
+            if (r.transRef && qr?.kind !== "slip") {
+              setTransRef(r.transRef);
+              checkDup(r.transRef);
+            }
+            if (r.fromBank && qr?.kind !== "slip") setBank(r.fromBank);
+            if (!t.has("account")) {
+              const acc = matchAccount(settings.accounts, r.fromBank || qr?.bank);
+              if (acc) setAccount(acc);
+            }
           }
         }
       } catch (e) {
@@ -143,7 +164,6 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
   }, []);
 
   const cats = type === "expense" ? settings.expenseCategories : settings.incomeCategories;
-  const qr = slip?.qr;
   const amountNum = Number(amount);
 
   async function save() {
@@ -152,9 +172,9 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
       amountRef.current?.focus();
       return;
     }
-    setBusy(true);
-    setErr("");
     const fd = new FormData();
+    const id = editing ? "" : crypto.randomUUID();
+    if (id) fd.set("id", id);
     fd.set("type", type);
     fd.set("amount", amount);
     fd.set("date", date);
@@ -164,6 +184,19 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
     fd.set("transRef", transRef);
     fd.set("account", account);
     if (slip) fd.set("slip", slip.blob, "slip.jpg");
+    if (!editing && onSubmitNew) {
+      // hand the upload to the page and move on — no waiting for the (slow) Sheet/Drive write
+      onSubmitNew({
+        fd,
+        tx: {
+          id, createdAt: new Date().toISOString(), date, type, amount: Math.round(amountNum * 100) / 100,
+          category, note: note.slice(0, 300), bank, transRef: transRef.trim(), slipFileId: "", account,
+        },
+      });
+      return;
+    }
+    setBusy(true);
+    setErr("");
     try {
       const res = await fetch(editing ? `/api/transactions/${editing.id}` : "/api/transactions", {
         method: editing ? "PATCH" : "POST",

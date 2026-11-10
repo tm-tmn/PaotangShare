@@ -68,15 +68,27 @@ export const ping = () =>
   call<{ ok: boolean; version?: number; multiUser?: boolean; sheet: string; folder: string; users?: number; mailQuota?: number }>("ping");
 
 // ----- accounts (login itself is Supabase; this is the per-user row in the Sheet) -----
+// Apps Script round-trips are slow (1–3 s), so a signed-in user's row is remembered briefly per server instance.
+// Writes made through this module drop the entry; a suspension made on another instance shows up within the TTL.
+const USER_TTL_MS = 45_000;
+const userCache = new Map<string, { u: UserPrivate | null; exp: number }>();
+const forget = (id: string) => void userCache.delete(id);
+
 export const findUser = async (email: string) => (await call<{ user: UserPrivate | null }>("userFind", { email })).user;
-export const getUser = async (id: string) => (await call<{ user: UserPrivate | null }>("userGet", { id })).user;
+export const getUser = async (id: string) => {
+  const hit = userCache.get(id);
+  if (hit && hit.exp > Date.now() && hit.u) return hit.u;
+  const u = (await call<{ user: UserPrivate | null }>("userGet", { id })).user;
+  if (u) userCache.set(id, { u, exp: Date.now() + USER_TTL_MS });
+  return u;
+};
 export const createUser = async (user: { id: string; email: string; name: string; status: "active" | "suspended"; role: "admin" | "user" }) =>
-  (await call<{ user: UserPublic }>("userCreate", { user })).user;
+  (await call<{ user: UserPublic }>("userCreate", { user }).finally(() => forget(user.id))).user;
 // pinEnc holds the encrypted PDF password the user chose
 export const updateUser = async (id: string, patch: Partial<Pick<UserPrivate, "name" | "status" | "role" | "pinEnc" | "geminiKey" | "lastLogin">>) =>
-  (await call<{ user: UserPublic }>("userUpdate", { id, patch })).user;
+  (await call<{ user: UserPublic }>("userUpdate", { id, patch }).finally(() => forget(id))).user;
 export const listUsers = async () => (await call<{ users: UserPublic[] }>("userList")).users;
-export const deleteUser = (id: string) => call<{ ok: boolean; removed: number }>("userDelete", { id });
+export const deleteUser = (id: string) => call<{ ok: boolean; removed: number }>("userDelete", { id }).finally(() => forget(id));
 
 // ----- one user's data -----
 export async function bootstrap(uid: string): Promise<{ items: Tx[]; settings: Settings; user: UserPublic }> {
