@@ -1,5 +1,5 @@
 // เป๋าตังค์ service worker: app-shell cache + Android share target for slips.
-const SHELL = "pt-shell-v3";
+const SHELL = "pt-shell-v4";
 const SHARE = "pt-share";
 
 self.addEventListener("install", (e) => {
@@ -53,8 +53,22 @@ self.addEventListener("fetch", (e) => {
     return;
   }
 
-  // Static build assets: cache first
-  if (url.pathname.startsWith("/_next/static/") || url.pathname.startsWith("/icons/")) {
+  // Icons keep the same URL across redesigns, so go to the network first (cache only as an offline fallback)
+  if (url.pathname.startsWith("/icons/")) {
+    e.respondWith(
+      fetch(e.request)
+        .then((res) => {
+          const copy = res.clone();
+          caches.open(SHELL).then((c) => c.put(e.request, copy));
+          return res;
+        })
+        .catch(() => caches.match(e.request)),
+    );
+    return;
+  }
+
+  // Hashed build assets: cache first
+  if (url.pathname.startsWith("/_next/static/")) {
     e.respondWith(
       caches.match(e.request).then(
         (hit) =>
