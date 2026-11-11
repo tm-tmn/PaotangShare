@@ -69,12 +69,13 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
     const fd = new FormData();
     fd.set("image", p.aiBlob, "slip.jpg");
     fd.set("categories", [...settings.expenseCategories, ...settings.incomeCategories].join(", "));
+    const t0 = performance.now();
     const res = await fetch("/api/scan", { method: "POST", body: fd });
     const data = await res.json().catch(() => ({}));
     // "no AI key" is only worth showing once we know AI is meant to be on
     if (res.status === 501 && scanRef.current !== true) return null;
     if (!res.ok) throw new Error(data.error || `AI error ${res.status}`);
-    return data.result as ScanResult;
+    return { ...(data.result as ScanResult), ms: Math.round(performance.now() - t0) };
   }
 
   async function handleFile(f: Blob) {
@@ -265,7 +266,7 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
                     <div className="muted">ไม่พบ QR ในรูป</div>
                   )}
                   {scan && scan.isSlip !== false && scan.amount ? (
-                    <div className="ok">✨ AI อ่านยอด {baht(scan.amount)} บาท — เช็กอีกทีนะคะ</div>
+                    <div className="ok">✨ AI อ่านยอด {baht(scan.amount)} บาท{scan.ms ? ` (${(scan.ms / 1000).toFixed(1)} วิ)` : ""} — เช็กอีกทีนะคะ</div>
                   ) : scan && scan.isSlip === false ? (
                     <small>AI: รูปนี้ไม่น่าใช่สลิป</small>
                   ) : scanErr ? (

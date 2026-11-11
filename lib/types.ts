@@ -49,6 +49,8 @@ export const DEFAULT_SETTINGS: Settings = {
 
 /** What the AI slip reader returns (all optional). */
 export interface ScanResult {
+  /** client-side: seconds the whole AI step took (upload + reading) */
+  ms?: number;
   isSlip?: boolean;
   amount?: number;
   date?: string;

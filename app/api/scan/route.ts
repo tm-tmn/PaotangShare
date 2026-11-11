@@ -3,6 +3,7 @@ import { requireActiveUser } from "@/lib/session";
 import type { ScanResult } from "@/lib/types";
 
 export const maxDuration = 60;
+export const preferredRegion = "sin1"; // closest to the users (Thailand)
 
 const SCHEMA = {
   type: "OBJECT",
@@ -72,32 +73,62 @@ export async function POST(req: Request) {
         },
       }),
     });
-    // busy (503/429), server hiccup (500) or unknown/blocked model (404/403) -> move on to the next model
+    // busy (503/429), server hiccup (500) or unknown/blocked model (404/403) -> try another model
     const retryable = (c: number) => [429, 500, 503, 404, 403].includes(c);
-    const deadline = Date.now() + 45_000; // stay under maxDuration
-    const ask = async (m: string, thinking: boolean) =>
-      fetch(urlFor(m), { ...initFor(thinking), signal: AbortSignal.timeout(Math.max(3000, Math.min(15000, deadline - Date.now()))) });
-    let res: Response | undefined;
-    for (let pass = 0; pass < 2 && Date.now() < deadline; pass++) {
-      for (const m of models) {
-        if (Date.now() >= deadline) break;
-        try {
-          res = await ask(m, true);
-          if (res.status === 400) {
-            const msg = JSON.stringify(await res.clone().json().catch(() => ({})));
-            if (/thinking/i.test(msg)) res = await ask(m, false);
-          }
-        } catch {
-          res = undefined;
-          continue;
-        }
-        if (res.ok || !retryable(res.status)) break;
+    const t0 = Date.now();
+    const deadline = t0 + 40_000; // stay under maxDuration
+    const HEDGE_MS = Number(process.env.GEMINI_HEDGE_MS || 5000); // still no answer after this long -> ask a second model in parallel
+    const ctrls: AbortController[] = [];
+    const ask = (m: string, thinking: boolean) => {
+      const c = new AbortController();
+      ctrls.push(c);
+      const t = setTimeout(() => c.abort(), Math.max(3000, Math.min(15000, deadline - Date.now())));
+      return fetch(urlFor(m), { ...initFor(thinking), signal: c.signal }).finally(() => clearTimeout(t));
+    };
+    type Attempt = { res: Response; model: string };
+    const tryModel = async (m: string): Promise<Attempt | null> => {
+      try {
+        let r = await ask(m, true);
+        if (r.status === 400 && /thinking/i.test(JSON.stringify(await r.clone().json().catch(() => ({}))))) r = await ask(m, false);
+        return { res: r, model: m };
+      } catch {
+        return null;
       }
-      if (res && (res.ok || !retryable(res.status))) break;
-      if (pass === 0) await new Promise((r) => setTimeout(r, 800));
-    }
+    };
+    // first model answers -> done. Slow (hedge) or failed -> start the next model without waiting; first good answer wins.
+    const won = await new Promise<Attempt | undefined>((resolve) => {
+      const order = [...models, ...models].slice(0, Math.max(4, models.length));
+      let started = 0, finished = 0, done = false, last: Attempt | undefined, hedge: ReturnType<typeof setTimeout> | undefined;
+      const finish = (a?: Attempt) => {
+        if (done) return;
+        done = true;
+        clearTimeout(hedge);
+        clearTimeout(cap);
+        resolve(a ?? last);
+      };
+      const cap = setTimeout(() => finish(), Math.max(1000, deadline - Date.now()));
+      const launch = () => {
+        if (done || started >= order.length) return;
+        const m = order[started++];
+        clearTimeout(hedge);
+        if (started < order.length) hedge = setTimeout(launch, HEDGE_MS);
+        tryModel(m).then((a) => {
+          finished++;
+          if (done) return;
+          if (a && (a.res.ok || !retryable(a.res.status))) return finish(a);
+          if (a) last = a;
+          if (started < order.length) launch();
+          else if (finished >= started) finish();
+        });
+      };
+      launch();
+    });
+    const res = won?.res;
+    const usedModel = won?.model || "";
     const body = res ? await res.json().catch(() => ({})) : {};
+    ctrls.forEach((c) => c.abort()); // drop the losers (only after the winner's body has been read)
     if (!res || !res.ok) {
+      console.log(`scan failed status=${res?.status ?? "none"} ms=${Date.now() - t0}`);
       const busy = !res || res.status === 503 || res.status === 429;
       return NextResponse.json(
         { error: busy ? "Gemini กำลังมีคนใช้งานเยอะ ลองกดแนบสลิปอีกครั้งในอีกสักครู่ (กรอกยอดเองหรือใช้ยอดจาก QR ได้เลย)" : `Gemini: ${body?.error?.message || res?.status}` },
@@ -111,7 +142,9 @@ export async function POST(req: Request) {
       amount: r.amount && r.amount > 0 ? Math.round(r.amount * 100) / 100 : undefined,
       date: fixDate(r.date),
     };
-    return NextResponse.json({ result: out });
+    const ms = Date.now() - t0;
+    console.log(`scan ok model=${usedModel} ms=${ms} bytes=${file.size}`);
+    return NextResponse.json({ result: out, ms, model: usedModel });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
