@@ -75,7 +75,9 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
     // "no AI key" is only worth showing once we know AI is meant to be on
     if (res.status === 501 && scanRef.current !== true) return null;
     if (!res.ok) throw new Error(data.error || `AI error ${res.status}`);
-    return { ...(data.result as ScanResult), ms: Math.round(performance.now() - t0) };
+    const t = data.timing as { auth: number; prep: number; gemini: number; total: number } | undefined;
+    const detail = t ? `เซิร์ฟเวอร์ ${(t.total / 1000).toFixed(1)} · login ${(t.auth / 1000).toFixed(1)} · Gemini ${(t.gemini / 1000).toFixed(1)} · ${String(data.model || "").replace("gemini-", "")}` : undefined;
+    return { ...(data.result as ScanResult), ms: Math.round(performance.now() - t0), detail };
   }
 
   async function handleFile(f: Blob) {
@@ -266,7 +268,7 @@ export default function TxForm({ settings, scanEnabled, editing, file, defaultDa
                     <div className="muted">ไม่พบ QR ในรูป</div>
                   )}
                   {scan && scan.isSlip !== false && scan.amount ? (
-                    <div className="ok">✨ AI อ่านยอด {baht(scan.amount)} บาท{scan.ms ? ` (${(scan.ms / 1000).toFixed(1)} วิ)` : ""} — เช็กอีกทีนะคะ</div>
+                    <div className="ok">✨ AI อ่านยอด {baht(scan.amount)} บาท{scan.ms ? ` (${(scan.ms / 1000).toFixed(1)} วิ)` : ""} — เช็กอีกทีนะคะ{scan.detail ? <div className="muted" style={{ fontSize: 11 }}>{scan.detail}</div> : null}</div>
                   ) : scan && scan.isSlip === false ? (
                     <small>AI: รูปนี้ไม่น่าใช่สลิป</small>
                   ) : scanErr ? (

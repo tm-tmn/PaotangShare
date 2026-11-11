@@ -51,6 +51,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export interface ScanResult {
   /** client-side: seconds the whole AI step took (upload + reading) */
   ms?: number;
+  detail?: string;
   isSlip?: boolean;
   amount?: number;
   date?: string;

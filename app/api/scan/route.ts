@@ -32,6 +32,7 @@ function fixDate(d?: string) {
 }
 
 export async function POST(req: Request) {
+  const tIn = Date.now();
   let key = "";
   try {
     // each user's own Gemini key; an optional shared key set by the admin is the fallback
@@ -40,6 +41,7 @@ export async function POST(req: Request) {
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 401 });
   }
+  const authMs = Date.now() - tIn;
   if (!key) return NextResponse.json({ error: "ยังไม่ได้ใส่คีย์ AI — ไปที่ ตั้งค่า → AI อ่านสลิป" }, { status: 501 });
   try {
     const form = await req.formData();
@@ -47,7 +49,7 @@ export async function POST(req: Request) {
     if (!(file instanceof File)) return NextResponse.json({ error: "no image" }, { status: 400 });
     const categories = String(form.get("categories") || "");
     // try the chosen model first, then other stable Flash models: when one is overloaded another usually isn't
-    const models = [...new Set([process.env.GEMINI_MODEL || "gemini-3.8-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-3.1-flash-lite"])];
+    const models = [...new Set(["gemini-3.5-flash-lite", process.env.GEMINI_MODEL || "gemini-3.8-flash", "gemini-3.6-flash", "gemini-3.1-flash-lite"])];
     const data = Buffer.from(await file.arrayBuffer()).toString("base64");
 
     const urlFor = (m: string) => `${process.env.GEMINI_BASE_URL || "https://generativelanguage.googleapis.com"}/v1beta/models/${encodeURIComponent(m)}:generateContent`;
@@ -76,8 +78,9 @@ export async function POST(req: Request) {
     // busy (503/429), server hiccup (500) or unknown/blocked model (404/403) -> try another model
     const retryable = (c: number) => [429, 500, 503, 404, 403].includes(c);
     const t0 = Date.now();
+    const prepMs = t0 - tIn - authMs; // upload body parse + base64
     const deadline = t0 + 40_000; // stay under maxDuration
-    const HEDGE_MS = Number(process.env.GEMINI_HEDGE_MS || 5000); // still no answer after this long -> ask a second model in parallel
+    const HEDGE_MS = Number(process.env.GEMINI_HEDGE_MS || 2500); // still no answer after this long -> ask a second model in parallel
     const ctrls: AbortController[] = [];
     const ask = (m: string, thinking: boolean) => {
       const c = new AbortController();
@@ -143,8 +146,8 @@ export async function POST(req: Request) {
       date: fixDate(r.date),
     };
     const ms = Date.now() - t0;
-    console.log(`scan ok model=${usedModel} ms=${ms} bytes=${file.size}`);
-    return NextResponse.json({ result: out, ms, model: usedModel });
+    console.log(`scan ok model=${usedModel} ms=${ms} auth=${authMs} prep=${prepMs} bytes=${file.size}`);
+    return NextResponse.json({ result: out, ms, model: usedModel, timing: { auth: authMs, prep: prepMs, gemini: ms, total: Date.now() - tIn } });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 500 });
   }
